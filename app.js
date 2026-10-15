@@ -377,7 +377,6 @@ async function vistaReservas() {
         </dl>
       </div>
       <div class="pase__talon">
-        <img class="pase__foto" src="${foto(v.destino.codigo)}" alt="${esc(v.destino.ciudad)}" loading="lazy">
         <div class="pase__talon-cuerpo">
           <div class="pase__valor"><small>${t ? "Pagado" : "A pagar"}</small>${usd(t ? t.valor : v.valor)}</div>
           ${t ? `<div class="codigo-barras" role="img" aria-label="Código de barras del tiquete ${t.id_tiquete}" style="background-position:${(t.id_tiquete * 7) % 13}px 0"></div>
