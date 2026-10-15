@@ -1,0 +1,58 @@
+{
+ "baq": {
+  "ciudad": "Barranquilla",
+  "titulo": "Barranquilla - Río Magdalena - panoramio (48).jpg",
+  "autor": "TMbux",
+  "licencia": "CC BY-SA 3.0",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Barranquilla_-_R%C3%ADo_Magdalena_-_panoramio_(48).jpg"
+ },
+ "bog": {
+  "ciudad": "Bogotá",
+  "titulo": "Bogotá, Santa Fe, 2023-06 CN-02.jpg",
+  "autor": "Steffen Schmitz (more photos)",
+  "licencia": "CC BY-SA 4.0",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Bogot%C3%A1,_Santa_Fe,_2023-06_CN-02.jpg"
+ },
+ "mde": {
+  "ciudad": "Medellín",
+  "titulo": "Medellín, Robledo, 2023-07 CN-05.jpg",
+  "autor": "Steffen Schmitz (more photos)",
+  "licencia": "CC BY-SA 4.0",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Medell%C3%ADn,_Robledo,_2023-07_CN-05.jpg"
+ },
+ "ctg": {
+  "ciudad": "Cartagena",
+  "titulo": "Sunset-cartagena-tower-dewired.jpg",
+  "autor": "Igvir Ramirez",
+  "licencia": "CC BY-SA 2.0",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Sunset-cartagena-tower-dewired.jpg"
+ },
+ "mia": {
+  "ciudad": "Miami",
+  "titulo": "Brickell skyline 2012.jpg",
+  "autor": "Daniel Christensen",
+  "licencia": "Public domain",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Brickell_skyline_2012.jpg"
+ },
+ "atl": {
+  "ciudad": "Atlanta",
+  "titulo": "View of the Piedmont Park Aquatic Center and the midtown Atlanta skyline from across Lake Clara Meer.jpg",
+  "autor": "Marc Merlin",
+  "licencia": "CC BY-SA 4.0",
+  "pagina": "https://commons.wikimedia.org/wiki/File:View_of_the_Piedmont_Park_Aquatic_Center_and_the_midtown_Atlanta_skyline_from_across_Lake_Clara_Meer.jpg"
+ },
+ "mex": {
+  "ciudad": "Ciudad de México",
+  "titulo": "Angel de la independencia170409.jpg",
+  "autor": "Carlos Valenzuela",
+  "licencia": "CC BY-SA 4.0",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Angel_de_la_independencia170409.jpg"
+ },
+ "pty": {
+  "ciudad": "Panamá",
+  "titulo": "Panama City , Panama.jpg",
+  "autor": "Mattias Hill",
+  "licencia": "CC BY-SA 3.0",
+  "pagina": "https://commons.wikimedia.org/wiki/File:Panama_City_,_Panama.jpg"
+ }
+}

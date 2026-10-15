@@ -5,7 +5,7 @@
 "use strict";
 
 const estado = { actor: null, usuarios: null, vueloAeropuerto: null, aeropuertos: [], vista: "inicio", info: null,
-  filtros: { origen: "", destino: "", fecha: "" }, clienteDelAgente: "", vuelos: null, rutas: null,
+  filtros: { origen: "", destino: "", fecha: "" }, clienteDelAgente: "", vuelos: null, rutas: null, precios: {},
   reporte: "ingresos", anioDw: "" };
 
 const $ = (selector) => document.querySelector(selector);
@@ -24,6 +24,20 @@ const duracion = (a, b) => {
 };
 const TIPO_ACTOR = { cliente: "Cliente", agente: "Agente de viaje", aeropuerto: "Aeropuerto" };
 const reducirMovimiento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** Foto de la ciudad de un aeropuerto (Wikimedia Commons, con sus créditos al pie de la página). */
+const foto = (codigo, mini = false) => `img/ciudades/${String(codigo).toLowerCase()}${mini ? "-mini" : ""}.jpg`;
+const codigoDe = (texto) => (/\(([A-Z]{3})\)/.exec(texto) || [])[1];
+
+const ILUSTRACION_MALETA = `<svg viewBox="0 0 120 130" aria-hidden="true"><rect x="14" y="34" width="92" height="82" rx="10" fill="var(--rojo)"/>
+  <rect x="42" y="14" width="36" height="24" rx="6" fill="none" stroke="var(--tinta)" stroke-width="6"/>
+  <rect x="30" y="34" width="10" height="82" fill="rgba(0,0,0,.2)"/><rect x="80" y="34" width="10" height="82" fill="rgba(0,0,0,.2)"/>
+  <circle cx="60" cy="72" r="15" fill="var(--superficie)" stroke="var(--tinta)" stroke-width="2"/><path d="M51 74 67 65l-3 13-4-4z" fill="var(--azul)"/>
+  <circle cx="97" cy="46" r="5" fill="var(--verde)"/><circle cx="23" cy="52" r="4" fill="var(--azul)"/>
+  <rect x="20" y="116" width="14" height="8" rx="3" fill="var(--tinta)"/><rect x="86" y="116" width="14" height="8" rx="3" fill="var(--tinta)"/></svg>`;
+const ILUSTRACION_AVION = `<svg viewBox="0 0 160 90" aria-hidden="true"><path d="M10 74 Q64 4 138 30" fill="none" stroke="var(--tinta)" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/>
+  <path d="M132 20 156 28 134 44 138 31z" fill="var(--rojo)"/><path d="M138 31 156 28 140 38z" fill="var(--azul)"/><circle cx="10" cy="74" r="5" fill="var(--superficie)" stroke="var(--tinta)" stroke-width="2.4"/></svg>`;
+const vacio = (texto) => `<div class="tarjeta vacio">${ILUSTRACION_AVION}${texto}</div>`;
 
 /** Llama a la API. Lanza Error con el mensaje del servidor; 401 cierra la sesión local. */
 async function api(metodo, ruta, cuerpo) {
@@ -53,6 +67,20 @@ async function hacer(accion) {
   try { await accion(); } catch (e) { console.error(e); aviso(e.message, "error"); }
 }
 
+/* ---------- tema de color: automático, claro u oscuro ---------- */
+
+const TEMAS = ["auto", "claro", "oscuro"];
+const temaActual = () => document.documentElement.dataset.tema || "auto";
+function pintarBotonTema() {
+  $("#tema").textContent = `Tema: ${{ auto: "Auto", claro: "Claro", oscuro: "Oscuro" }[temaActual()]}`;
+}
+function alternarTema() {
+  const siguiente = TEMAS[(TEMAS.indexOf(temaActual()) + 1) % TEMAS.length];
+  if (siguiente === "auto") delete document.documentElement.dataset.tema; else document.documentElement.dataset.tema = siguiente;
+  try { siguiente === "auto" ? localStorage.removeItem("data-delta:tema") : localStorage.setItem("data-delta:tema", siguiente); } catch { /* sin almacenamiento */ }
+  pintarBotonTema();
+}
+
 /* ---------- mapa de rutas (con las coordenadas de aeropuerto del modelo) ---------- */
 
 const MAPA = { lon0: -104, lon1: -70, lat0: 2, lat1: 36, ancho: 600 };
@@ -68,7 +96,7 @@ function arco([x1, y1], [x2, y2]) {
   return `M${x1.toFixed(1)} ${y1.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`;
 }
 
-/** Mapa técnico: malla de latitud y longitud, rutas del sistema (tenues) y las que se están viendo (ámbar). */
+/** Carta de navegación: malla de latitud y longitud, rutas del sistema (tenues) y las que se están viendo (rojo). */
 function htmlMapa(vivas = new Set(), activo = null) {
   const puntos = new Map(estado.aeropuertos.map((a) => [a.id_aeropuerto, { ...a, p: proyectar(a.latitud, a.longitud) }]));
   const malla = [];
@@ -88,7 +116,7 @@ function htmlMapa(vivas = new Set(), activo = null) {
   const viva = pares.find(([o, d]) => vivas.has(`${o}-${d}`)) ?? pares[0];
   let avion = "";
   if (viva && !reducirMovimiento && puntos.get(viva[0]) && puntos.get(viva[1])) {
-    avion = `<path class="mapa__avion" d="M-7 -5 L9 0 L-7 5 L-3 0z"><animateMotion dur="7s" repeatCount="indefinite" rotate="auto" path="${arco(puntos.get(viva[0]).p, puntos.get(viva[1]).p)}"/></path>`;
+    avion = `<path class="mapa__avion" d="M-8 -6 L10 0 L-8 6 L-4 0z"><animateMotion dur="7s" repeatCount="indefinite" rotate="auto" path="${arco(puntos.get(viva[0]).p, puntos.get(viva[1]).p)}"/></path>`;
   }
   // Los aeropuertos colombianos quedan muy juntos: los del oeste llevan la etiqueta a la izquierda para que no se pisen.
   const marcas = [...puntos.values()].map((a) => {
@@ -98,7 +126,7 @@ function htmlMapa(vivas = new Set(), activo = null) {
     return `<g data-accion="mapa-aeropuerto" data-id="${a.id_aeropuerto}"><title>${esc(a.ciudad)} (${esc(a.codigo)}) · ${esc(a.pais)}</title>
       <circle class="mapa__punto ${activo === a.id_aeropuerto ? "mapa__punto--activo" : ""}" cx="${x}" cy="${y}" r="6"/>
       <text class="mapa__codigo" text-anchor="${lado}" x="${x + dx}" y="${y + 5}">${esc(a.codigo)}</text>
-      <text class="mapa__ciudad" text-anchor="${lado}" x="${x + dx}" y="${y + 17}">${esc(a.ciudad)}</text></g>`;
+      <text class="mapa__ciudad" text-anchor="${lado}" x="${x + dx}" y="${y + 18}">${esc(a.ciudad)}</text></g>`;
   });
   return `<div class="mapa"><svg viewBox="0 0 ${MAPA.ancho} ${MAPA.ancho}" role="img" aria-label="Mapa de rutas entre los aeropuertos del sistema">${malla.join("")}${rutas.join("")}${marcas.join("")}${avion}</svg>
     <div class="mapa__leyenda"><span>${pares.length} rutas · ${estado.aeropuertos.length} aeropuertos</span><span>coordenadas de <b>aeropuerto</b></span></div></div>`;
@@ -110,6 +138,10 @@ async function cargarRutas() {
     const { vuelos } = await api("GET", "/api/vuelos");
     estado.rutas = [...new Set(vuelos.map((v) => `${v.origen.id_aeropuerto}-${v.destino.id_aeropuerto}`))]
       .map((par) => par.split("-").map(Number));
+    for (const v of vuelos) {  // el valor más bajo con que se llega a cada destino
+      const actual = estado.precios[v.destino.codigo];
+      if (actual === undefined || v.valor < actual) estado.precios[v.destino.codigo] = v.valor;
+    }
   }
 }
 
@@ -175,6 +207,18 @@ async function ir(vista) {
 async function vistaInicio() {
   await cargarRutas();
   const u = estado.usuarios;
+  const porCodigo = new Map(estado.aeropuertos.map((a) => [a.codigo, a]));
+  const desde = (codigo) => (estado.precios[codigo] !== undefined ? `desde ${usd(estado.precios[codigo])}` : "");
+  const hoy = new Date();
+  const postal = (codigo, n, giro) => {
+    const a = porCodigo.get(codigo);
+    return a ? `<button type="button" class="postal postal--${n}" style="--giro:${giro}deg" data-accion="destino" data-id="${a.id_aeropuerto}" aria-label="Ver vuelos a ${esc(a.ciudad)}">
+      <img src="${foto(codigo)}" alt="${esc(a.ciudad)}"><span class="sello-postal">${esc(codigo)}</span>
+      <span class="postal__pie">${esc(a.ciudad)}<span>${desde(codigo)}</span></span></button>` : "";
+  };
+  const destino = (a) => `<button type="button" class="destino" data-accion="destino" data-id="${a.id_aeropuerto}">
+      <img src="${foto(a.codigo, true)}" alt="${esc(a.ciudad)}" loading="lazy"><span class="sello-postal">${esc(a.codigo)}</span>
+      <span class="destino__texto"><strong>${esc(a.ciudad)}</strong><span>${esc(a.pais)}</span><span>${desde(a.codigo)}</span></span></button>`;
   const mostrador = (titulo, codigo, texto, tipo, opciones) => `
     <div class="tarjeta mostrador"><h2>${titulo} <small>${codigo}</small></h2><p class="ayuda">${texto}</p>
       <select data-entrada="${tipo}" aria-label="${esc(titulo)}">${opciones}</select>
@@ -185,10 +229,14 @@ async function vistaInicio() {
         <h1>Reserve. Embarque.<br><em>Siga su maleta.</em></h1>
         <p>Prototipo de Data-Delta Airlines sobre el modelo relacional del Parcial 2: dos recorridos de la interfaz a la base de datos
         y un Data Warehouse que responde ingresos, reservaciones y millas. No hay claves: elija con quién entrar.</p>
-        <p class="ayuda mono">El mapa dibuja las rutas con las coordenadas de la tabla <b>aeropuerto</b>.</p>
+        <button type="button" class="boton" data-ir="vuelos">Ver las salidas</button>
       </div>
-      ${htmlMapa()}
+      <div class="postales" aria-label="Destinos">${postal("CTG", 1, -5)}${postal("MEX", 2, 4)}${postal("MIA", 3, -2)}
+        <div class="matasellos" aria-hidden="true">DATA-DELTA<br>${hoy.getDate()} ${MESES[hoy.getMonth()].toUpperCase()}<br>${hoy.getFullYear()}</div></div>
     </section>
+    <div class="titulo-seccion"><h2>Destinos</h2><small>Toque uno para ver sus vuelos</small></div>
+    <div class="destinos">${estado.aeropuertos.map(destino).join("")}</div>
+    <div class="titulo-seccion"><h2>Entre al mostrador</h2><small>Sin claves: el modelo no las guarda</small></div>
     <div class="entradas">
       ${mostrador("Soy cliente", "A · 01", "Busque un vuelo, reserve, compre su tiquete y cancélelo si cambia de plan.", "cliente",
         u.clientes.map((c) => `<option value="${c.id_cliente}">${esc(c.nombre)}</option>`).join(""))}
@@ -197,6 +245,12 @@ async function vistaInicio() {
       ${mostrador("Trabajo en un aeropuerto", "B · 01", "Registre el abordaje, reciba maletas y escanéelas en el origen y en el destino.", "aeropuerto",
         u.aeropuertos.map((a) => `<option value="${a.id_aeropuerto}">${esc(a.ciudad)} (${esc(a.codigo)})</option>`).join(""))}
     </div>
+    <div class="titulo-seccion"><h2>La red de rutas</h2></div>
+    <div class="red">${htmlMapa()}
+      <div><p>El mapa se dibuja con las coordenadas de la tabla <b class="mono">aeropuerto</b> del modelo relacional: ninguna ruta está
+      escrita a mano. Cada arco es una pareja origen-destino con vuelos programados; el avión recorre una de ellas.</p>
+      <p class="ayuda">Toque un aeropuerto del mapa en la pantalla de salidas para usarlo como origen.</p></div></div>
+    <div class="titulo-seccion"><h2>Tres recorridos</h2></div>
     <div class="pasos">
       <div class="tarjeta"><h3><span>A</span> Comprar y cancelar</h3><ol>
         <li>Buscar un vuelo por origen, destino y fecha.</li><li>Reservar (el cupo aún no se ocupa).</li>
@@ -217,6 +271,7 @@ const filaVuelo = (v) => {
   const puedeReservar = a && (a.tipo === "cliente" || a.tipo === "agente");
   const cupos = v.cupos_libres > 10 ? "ok" : v.cupos_libres > 0 ? "aviso" : "malo";
   return `<article class="fila-vuelo">
+    <img class="fila-vuelo__foto" src="${foto(v.destino.codigo, true)}" alt="${esc(v.destino.ciudad)}" loading="lazy">
     <div class="fila-vuelo__hora">${esc(hora(v.salida_programada))}<span class="fila-vuelo__dia">${esc(dia(v.salida_programada))}</span></div>
     <div class="ruta">
       <div class="ruta__ciudad"><strong>${esc(v.origen.codigo)}</strong><span>${esc(v.origen.ciudad)}</span></div>
@@ -253,7 +308,9 @@ async function vistaVuelos() {
           estado.usuarios.clientes.map((c) => `<option value="${c.id_cliente}" ${String(c.id_cliente) === String(estado.clienteDelAgente) ? "selected" : ""}>${esc(c.nombre)}</option>`).join("")}</select></label>` : ""}
         <button type="submit" class="boton">Buscar</button>
       </form>
-      <p class="ayuda">Las rutas en ámbar son las que cumplen la búsqueda. Haga clic en un aeropuerto del mapa para usarlo como origen.</p></div>
+      <p class="ayuda">Las rutas en rojo son las que cumplen la búsqueda. Haga clic en un aeropuerto del mapa para usarlo como origen, o elija un destino:</p>
+      <div class="atajos">${estado.aeropuertos.map((a) => `<button type="button" class="atajo" data-accion="destino" data-id="${a.id_aeropuerto}"
+        aria-pressed="${String(f.destino) === String(a.id_aeropuerto)}"><img src="${foto(a.codigo, true)}" alt=""><span>${esc(a.codigo)}</span></button>`).join("")}</div></div>
       <div id="mapa-vuelos"></div>
     </div>
     <div id="resultados"></div>
@@ -269,8 +326,8 @@ async function buscarVuelos() {
   const vivas = new Set(vuelos.map((v) => `${v.origen.id_aeropuerto}-${v.destino.id_aeropuerto}`));
   $("#mapa-vuelos").innerHTML = htmlMapa(vivas, f.origen ? Number(f.origen) : null);
   $("#resultados").innerHTML = vuelos.length
-    ? `<div class="tablero"><div class="tablero__cabecera"><span>Salida</span><span>Ruta</span><span>Vuelo</span><span>Puerta</span><span>Cupos</span><span style="text-align:right">Valor</span></div>${vuelos.map(filaVuelo).join("")}</div>`
-    : '<div class="tarjeta vacio">No hay vuelos con esos filtros. Pruebe con otra fecha o quite algún filtro.</div>';
+    ? `<div class="tablero">${vuelos.map(filaVuelo).join("")}</div>`
+    : vacio("No hay vuelos con esos filtros. Pruebe con otra fecha o quite algún filtro.");
 }
 
 async function alternarDetalle(id, boton) {
@@ -299,6 +356,7 @@ async function vistaReservas() {
     const t = r.tiquete, v = r.vuelo;
     const yaSalio = aFecha(v.salida_programada) <= ahora;
     return `<article class="pase ${t ? "" : "pase--reserva"}">
+      <span class="pase__notch pase__notch--a"></span><span class="pase__notch pase__notch--b"></span>
       <div class="pase__cuerpo">
         <div class="pase__marca">Data-Delta Airlines · ${t ? "Pase de abordar" : "Reserva"}</div>
         <span class="sello sello--${clase}">${texto}</span>
@@ -319,9 +377,12 @@ async function vistaReservas() {
         </dl>
       </div>
       <div class="pase__talon">
-        <div class="pase__valor"><small>${t ? "Pagado" : "A pagar"}</small>${usd(t ? t.valor : v.valor)}</div>
-        ${t ? `<div class="codigo-barras" role="img" aria-label="Código de barras del tiquete ${t.id_tiquete}" style="background-position:${(t.id_tiquete * 7) % 13}px 0"></div>
-        <div class="mono ayuda">TIQUETE #${t.id_tiquete}</div>` : '<div class="ayuda">Aún sin tiquete</div>'}
+        <img class="pase__foto" src="${foto(v.destino.codigo)}" alt="${esc(v.destino.ciudad)}" loading="lazy">
+        <div class="pase__talon-cuerpo">
+          <div class="pase__valor"><small>${t ? "Pagado" : "A pagar"}</small>${usd(t ? t.valor : v.valor)}</div>
+          ${t ? `<div class="codigo-barras" role="img" aria-label="Código de barras del tiquete ${t.id_tiquete}" style="background-position:${(t.id_tiquete * 7) % 13}px 0"></div>
+          <div class="mono ayuda">TIQUETE #${t.id_tiquete}</div>` : '<div class="ayuda">Aún sin tiquete</div>'}
+        </div>
       </div>
       ${(r.estado === "reservada" || r.estado === "comprado") && !yaSalio ? `<div class="pase__acciones">
         ${r.estado === "reservada" ? `<button type="button" class="boton" data-accion="comprar" data-reserva="${r.id_reserva}">Comprar tiquete</button>` : ""}
@@ -331,11 +392,11 @@ async function vistaReservas() {
   };
   const proximos = reservas.filter((r) => aFecha(r.vuelo.salida_programada) > ahora);
   const anteriores = reservas.filter((r) => aFecha(r.vuelo.salida_programada) <= ahora).reverse();
-  const seccion = (titulo, lista) => lista.length ? `<h2>${titulo}</h2><div class="rejilla">${lista.map(pase).join("")}</div>` : "";
+  const seccion = (titulo, lista) => lista.length ? `<h2 style="margin-top:1.5rem">${titulo}</h2><div class="rejilla">${lista.map(pase).join("")}</div>` : "";
   $("#principal").innerHTML = `<h1>Mis reservas y tiquetes</h1>
     ${agente ? '<p class="ayuda">Reservas que usted gestiona, a nombre de sus clientes.</p>' : ""}
     ${seccion("Próximos viajes", proximos)}${seccion("Viajes anteriores", anteriores)}
-    ${reservas.length ? "" : '<div class="tarjeta vacio">Todavía no tiene reservas. Busque un vuelo y reserve el primero.</div>'}`;
+    ${reservas.length ? "" : vacio("Todavía no tiene reservas. Busque un vuelo y reserve el primero.")}`;
 }
 
 /* ---------- recorrido B: aeropuerto ---------- */
@@ -371,20 +432,22 @@ async function vistaAeropuerto(idVuelo = estado.vueloAeropuerto) {
   };
   const actual = vuelos.find((v) => v.id_vuelo === seleccionado);
   const sale = actual && actual.id_aeropuerto_origen === yo;
-  $("#principal").innerHTML = `<h1>Embarque y equipaje · ${esc(estado.actor.nombre)}</h1>
+  const codigo = codigoDe(estado.actor.nombre);
+  $("#principal").innerHTML = `<div class="banner"><img src="${foto(codigo)}" alt=""><div class="banner__texto">
+      <h1>Embarque y equipaje</h1><p>${esc(estado.actor.nombre)}</p></div></div>
     <p class="ayuda">El abordaje y la recepción de maletas se hacen en el aeropuerto de origen del vuelo; la lectura de una maleta, en el origen o en el destino.</p>
     ${vuelos.length ? `<div class="filtros"><label class="campo">Vuelo<select id="selector-vuelo">${vuelos.map(opcion).join("")}</select></label></div>
       <section class="tarjeta grupo"><div class="grupo__titulo"><h2>${sale ? "Sale de aquí" : "Llega aquí"} · ${esc(actual.numero_vuelo)}</h2>
         <span class="ayuda mono">${esc(actual.o_ciudad)} → ${esc(actual.d_ciudad)}</span></div>
         ${tiquetes.map((r) => pasajero(r, sale)).join("")}</section>`
-      : '<div class="tarjeta vacio">No hay tiquetes para vuelos de este aeropuerto. Compre uno como cliente para un vuelo que salga de aquí.</div>'}`;
+      : vacio("No hay tiquetes para vuelos de este aeropuerto. Compre uno como cliente para un vuelo que salga de aquí.")}`;
 }
 
 function vistaRastreo(etiqueta = "") {
   $("#principal").innerHTML = `<h1>Rastrear una maleta</h1>
-    <form id="form-rastreo" class="filtros"><label class="campo">Etiqueta de la maleta
+    <div class="rastro-hero"><form id="form-rastreo" class="filtros"><label class="campo">Etiqueta de la maleta
       <input name="etiqueta" value="${esc(etiqueta)}" placeholder="Por ejemplo DL00012-1" autocomplete="off"></label>
-      <button type="submit" class="boton">Rastrear</button></form>
+      <button type="submit" class="boton">Rastrear</button></form>${ILUSTRACION_MALETA}</div>
     <div id="rastro"></div>`;
   if (etiqueta) return rastrear(etiqueta);
 }
@@ -413,11 +476,16 @@ function tablaCalor(rep, def) {
   const max = Math.max(1, ...rep.filas.flatMap((f) => f.valores));
   const celda = (v) => {
     if (!v) return '<td class="celda" style="color:var(--suave)">·</td>';
-    const alfa = 0.12 + 0.85 * (v / max);
-    return `<td class="celda" style="background:rgba(255,184,28,${alfa.toFixed(2)});${alfa > 0.5 ? "color:#0b2540" : ""}">${def.celda(v)}</td>`;
+    const alfa = 0.1 + 0.82 * (v / max);
+    return `<td class="celda" style="background:color-mix(in srgb, var(--rojo) ${Math.round(alfa * 100)}%, transparent);${alfa > 0.55 ? "color:var(--rojo-sobre)" : ""}">${def.celda(v)}</td>`;
+  };
+  const etiqueta = (f) => {
+    const a = estado.aeropuertos.find((x) => x.ciudad === f.etiqueta);
+    return a ? `<span class="persona"><img src="${foto(a.codigo, true)}" alt=""><span>${esc(f.etiqueta)}<small>${esc(f.detalle)}</small></span></span>`
+      : `${esc(f.etiqueta)}<small>${esc(f.detalle)}</small>`;
   };
   return `<div class="mapa-calor"><table><thead><tr><th>${def.fila}</th>${rep.meses.map((m) => `<th>${m}</th>`).join("")}<th>Total</th></tr></thead>
-    <tbody>${rep.filas.map((f) => `<tr><td>${esc(f.etiqueta)}<small>${esc(f.detalle)}</small></td>${f.valores.map(celda).join("")}<td class="total">${def.celda(f.total)}</td></tr>`).join("")}</tbody>
+    <tbody>${rep.filas.map((f) => `<tr><td>${etiqueta(f)}</td>${f.valores.map(celda).join("")}<td class="total">${def.celda(f.total)}</td></tr>`).join("")}</tbody>
     <tfoot><tr><td>Total</td>${rep.totales_mes.map((v) => `<td>${v ? def.celda(v) : "·"}</td>`).join("")}<td class="total">${def.celda(rep.total)}</td></tr></tfoot></table></div>`;
 }
 
@@ -432,6 +500,7 @@ function graficoMeses(rep) {
 }
 
 async function vistaAnalitica() {
+  await cargarRutas();
   const dw = await api("GET", "/api/dw");
   const e = estado.info.esquema, filas = dw.filas;
   const nombres = Object.keys(filas);
@@ -470,6 +539,7 @@ const VISTAS = { inicio: vistaInicio, vuelos: vistaVuelos, reservas: vistaReserv
 /* ---------- eventos ---------- */
 
 document.addEventListener("click", (e) => {
+  if (e.target.closest("#tema")) return void alternarTema();
   const ir_ = e.target.closest("[data-ir]");
   if (ir_) return void ir(ir_.dataset.ir);
   const boton = e.target.closest("[data-accion]");
@@ -485,6 +555,9 @@ document.addEventListener("click", (e) => {
       }
       case "mapa-aeropuerto":
         estado.filtros.origen = String(estado.filtros.origen) === d.id ? "" : d.id;
+        return ir("vuelos");
+      case "destino":
+        estado.filtros = { origen: "", destino: d.id, fecha: "" };
         return ir("vuelos");
       case "detalle": return alternarDetalle(d.vuelo, boton);
       case "reservar": {
@@ -537,8 +610,20 @@ document.addEventListener("change", (e) => {
 
 /* ---------- inicio ---------- */
 
+/** Créditos de las fotos (autor y licencia de Wikimedia Commons) al pie de la página. */
+async function pintarCreditos() {
+  try {
+    const r = await fetch("img/ciudades/creditos.json", { cache: "no-cache" });
+    const creditos = await r.json();
+    $("#creditos").innerHTML = "Fotografías de Wikimedia Commons: " + Object.values(creditos).map((c) =>
+      `${esc(c.ciudad)}, <a href="${esc(c.pagina)}" target="_blank" rel="noopener">${esc(c.autor.replace(/\s*\(more photos\)\s*/i, ""))}</a> (${esc(c.licencia)})`).join("; ") + ".";
+  } catch (e) { console.error("No se pudieron leer los créditos de las fotos", e); }
+}
+
 async function iniciar() {
   try {
+    pintarBotonTema();
+    pintarCreditos();
     estado.usuarios = await api("GET", "/api/demo/usuarios");
     estado.info = await api("GET", "/api/info");
     const e = estado.info.esquema;

@@ -12,6 +12,16 @@ La demo no necesita servidor: el mismo código Python se ejecuta dentro del nave
 [Pyodide](https://pyodide.org). La primera visita descarga unos 8 MB y tarda unos segundos; las siguientes
 cargan desde la caché. Los datos se guardan en el `localStorage` de cada navegador.
 
+## Identidad visual
+
+La interfaz usa el vocabulario del correo aéreo: papel crema, tinta, el rojo y el azul de las cartas aéreas, franjas diagonales,
+sellos y postales. Los pases de abordar, el tablero de salidas y las etiquetas de maleta están dibujados con CSS y SVG; el mapa de
+rutas se calcula con las coordenadas de la tabla `aeropuerto`. Tiene tema claro y oscuro (el oscuro es el mismo papel de noche, con
+los mismos matices) y un botón *Tema* que alterna entre Auto (el del sistema), Claro y Oscuro.
+
+Las fotos de las ocho ciudades (`img/ciudades/`) son de Wikimedia Commons con licencia libre; el autor y la licencia de cada una están
+en `img/ciudades/creditos.json` y en el pie de la página.
+
 ## Qué se puede hacer
 
 No hay claves: el modelo relacional no tiene credenciales, así que se **entra como** un cliente, un agente de
