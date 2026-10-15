@@ -271,7 +271,6 @@ const filaVuelo = (v) => {
   const puedeReservar = a && (a.tipo === "cliente" || a.tipo === "agente");
   const cupos = v.cupos_libres > 10 ? "ok" : v.cupos_libres > 0 ? "aviso" : "malo";
   return `<article class="fila-vuelo">
-    <img class="fila-vuelo__foto" src="${foto(v.destino.codigo, true)}" alt="${esc(v.destino.ciudad)}" loading="lazy">
     <div class="fila-vuelo__hora">${esc(hora(v.salida_programada))}<span class="fila-vuelo__dia">${esc(dia(v.salida_programada))}</span></div>
     <div class="ruta">
       <div class="ruta__ciudad"><strong>${esc(v.origen.codigo)}</strong><span>${esc(v.origen.ciudad)}</span></div>

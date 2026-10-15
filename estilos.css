@@ -191,10 +191,10 @@ label.campo select, label.campo input { font: 400 1rem/1.3 var(--fuente); letter
 .destino__texto span { display: block; }
 .tablero { display: grid; gap: .8rem; }
 .tablero__cabecera { display: none; }
-.fila-vuelo { display: grid; grid-template-columns: 150px 5.4rem 1fr 11rem 4rem 6rem 9rem; gap: .5rem 1rem; align-items: center;
+.fila-vuelo { display: grid; grid-template-columns: 5.4rem 1fr 11rem 4rem 6rem 9rem; gap: .5rem 1rem; align-items: center;
   background: var(--superficie); border: 1.5px solid var(--linea); border-radius: 4px; box-shadow: var(--sombra); padding: .6rem; position: relative; }
 .fila-vuelo::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--franja); border-radius: 4px 0 0 4px; }
-.fila-vuelo__foto { width: 150px; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 2px; margin-left: .35rem; }
+.fila-vuelo { padding-left: 1.3rem; }
 .fila-vuelo__hora { font: 600 1.45rem/1 var(--mono); }
 .fila-vuelo__dia { display: block; font: 500 .72rem/1.3 var(--mono); color: var(--suave); }
 .ruta { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
@@ -207,8 +207,8 @@ label.campo select, label.campo input { font: 400 1rem/1.3 var(--fuente); letter
 .fila-vuelo__puerta { font: 600 1.3rem/1 var(--mono); }
 .fila-vuelo__precio { text-align: right; font: 600 1.15rem/1.1 var(--mono); color: var(--tinta); }
 .fila-vuelo__precio small { display: block; color: var(--suave); font: 400 .7rem/1.3 var(--fuente); }
-.fila-vuelo__acciones { grid-column: 2 / -1; display: flex; gap: .5rem; flex-wrap: wrap; }
-.detalle { grid-column: 2 / -1; background: var(--superficie-2); border-radius: 3px; padding: .75rem 1rem; font-size: .9rem; }
+.fila-vuelo__acciones { grid-column: 1 / -1; display: flex; gap: .5rem; flex-wrap: wrap; }
+.detalle { grid-column: 1 / -1; background: var(--superficie-2); border-radius: 3px; padding: .75rem 1rem; font-size: .9rem; }
 .detalle dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: .2rem 1rem; }
 .detalle dt { color: var(--rojo); font: 600 .72rem/1.9 var(--fuente); letter-spacing: .12em; text-transform: uppercase; }
 .detalle dd { margin: 0; }
@@ -323,10 +323,8 @@ details.consulta pre { background: var(--tinta); color: var(--superficie); paddi
   .heroe { grid-template-columns: 1fr; } .heroe h1 { font-size: 2.7rem; }
   .postales { height: 340px; max-width: 520px; }
   .flujo, .red, .vuelos-cabecera { grid-template-columns: 1fr; }
-  .fila-vuelo { grid-template-columns: 110px 1fr auto; }
-  .fila-vuelo__foto { width: 110px; grid-row: span 2; }
-  .fila-vuelo__hora { grid-column: 2 / -1; }
-  .fila-vuelo__meta, .fila-vuelo__puerta, .fila-vuelo__precio, .fila-vuelo__acciones, .detalle { grid-column: 1 / -1; }
+  .fila-vuelo { grid-template-columns: 1fr auto; }
+  .fila-vuelo__hora, .ruta, .fila-vuelo__meta, .fila-vuelo__puerta, .fila-vuelo__precio, .fila-vuelo__acciones, .detalle { grid-column: 1 / -1; }
   .fila-vuelo__precio { text-align: left; }
 }
 @media (max-width: 640px) {
