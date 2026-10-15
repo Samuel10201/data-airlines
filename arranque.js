@@ -126,7 +126,7 @@ async function arrancar() {
       await arrancarPyodide();
       mostrarFranja();
     }
-    await cargarScript("app.js?v=20261015d");
+    await cargarScript("app.js?v=20261015e");
     document.getElementById("carga").hidden = true;
   } catch (e) {
     errorCarga(`${e.message} Revise su conexión a internet (Pyodide se descarga de cdn.jsdelivr.net) y recargue la página.`);
