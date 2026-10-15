@@ -275,13 +275,13 @@ const filaVuelo = (v) => {
     <div class="ruta">
       <div class="ruta__ciudad"><strong>${esc(v.origen.codigo)}</strong><span>${esc(v.origen.ciudad)}</span></div>
       <span class="ruta__flecha" aria-hidden="true">→</span>
-      <div class="ruta__ciudad"><strong>${esc(v.destino.codigo)}</strong><span>${esc(v.destino.ciudad)} · ${esc(hora(v.llegada_programada))}</span></div>
+      <div class="ruta__ciudad"><strong>${esc(v.destino.codigo)}</strong><span>${esc(v.destino.ciudad)} · llega ${esc(hora(v.llegada_programada))}</span></div>
     </div>
-    <div class="fila-vuelo__meta">Vuelo <b>${esc(v.numero_vuelo)}</b><br>${esc(duracion(v.salida_programada, v.llegada_programada))} · ${num(v.millas, 0)} mi<br>
-      <span class="chip ${v.nacional ? "chip--info" : "chip--aviso"}">${v.nacional ? "Nacional" : "Internacional"}</span></div>
-    <div class="fila-vuelo__puerta">${esc(v.puerta || "—")}</div>
-    <div><span class="chip chip--${cupos}">${v.cupos_libres} cupos</span></div>
+    <div class="fila-vuelo__dato fila-vuelo__puerta"><small>Puerta</small><b>${esc(v.puerta || "—")}</b></div>
+    <div class="fila-vuelo__dato fila-vuelo__cupos"><small>Cupos</small><span class="chip chip--${cupos}">${v.cupos_libres}</span></div>
     <div class="fila-vuelo__precio">${usd(v.valor)}<small>por pasajero</small></div>
+    <div class="fila-vuelo__meta"><span>Vuelo <b>${esc(v.numero_vuelo)}</b></span><span>${esc(duracion(v.salida_programada, v.llegada_programada))}</span><span>${num(v.millas, 0)} mi</span>
+      <span class="chip ${v.nacional ? "chip--info" : "chip--aviso"}">${v.nacional ? "Nacional" : "Internacional"}</span></div>
     <div class="fila-vuelo__acciones">
       ${puedeReservar ? `<button type="button" class="boton boton--chico" data-accion="reservar" data-vuelo="${v.id_vuelo}">Reservar</button>` : ""}
       <button type="button" class="boton boton--sec boton--chico" data-accion="detalle" data-vuelo="${v.id_vuelo}" aria-expanded="false">Ver detalle</button>

@@ -187,32 +187,41 @@ label.campo select, label.campo input { font: 400 1rem/1.3 var(--fuente); letter
 /* ---- vuelos: tarjetas de salida con foto ---- */
 .vuelos-cabecera { display: grid; grid-template-columns: 1fr 330px; gap: 1rem; align-items: start; margin-bottom: 1rem; }
 .vuelos-cabecera .filtros { margin-bottom: 0; }
-.atajos { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .6rem; }
-.atajo { display: flex; align-items: center; gap: .45rem; border: 1.5px solid var(--linea); background: var(--superficie); padding: 3px 9px 3px 3px;
-  border-radius: 3px; cursor: pointer; font: 700 .82rem/1 var(--mono); color: var(--tinta); }
+.vuelos-cabecera .ayuda { margin: .7rem 0 0; }
+.atajos { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; margin-top: .7rem; }
+.atajo { display: grid; gap: 0; border: 1.5px solid var(--linea); background: var(--superficie); padding: 3px 3px 0; overflow: hidden;
+  border-radius: 3px; cursor: pointer; font: 700 .85rem/1 var(--mono); color: var(--tinta); text-align: center; box-shadow: var(--sombra); }
+.atajo span { padding: .45rem 0 .5rem; letter-spacing: .08em; }
 .atajo:hover, .atajo[aria-pressed="true"] { border-color: var(--rojo); }
-.atajo img { width: 46px; height: 30px; object-fit: cover; border-radius: 2px; }
+.atajo[aria-pressed="true"] span { color: var(--rojo); }
+.atajo img { width: 100%; height: 62px; object-fit: cover; border-radius: 2px; }
 .destino__texto span { display: block; }
 .tablero { display: grid; gap: .8rem; }
 .tablero__cabecera { display: none; }
-.fila-vuelo { display: grid; grid-template-columns: 5.4rem 1fr 11rem 4rem 6rem 9rem; gap: .5rem 1rem; align-items: center;
-  background: var(--superficie); border: 1.5px solid var(--linea); border-radius: 4px; box-shadow: var(--sombra); padding: .6rem; position: relative; }
+.fila-vuelo { display: grid; grid-template-columns: 5.6rem minmax(0, 1fr) 4.6rem 5.6rem 11rem;
+  grid-template-areas: "hora ruta puerta cupos precio" "hora meta meta meta acciones" "detalle detalle detalle detalle detalle";
+  gap: .35rem 1.2rem; align-items: center; background: var(--superficie); border: 1.5px solid var(--linea); border-radius: 4px;
+  box-shadow: var(--sombra); padding: .8rem .9rem .8rem 1.4rem; position: relative; }
 .fila-vuelo::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--franja); border-radius: 4px 0 0 4px; }
-.fila-vuelo { padding-left: 1.3rem; }
-.fila-vuelo__hora { font: 600 1.45rem/1 var(--mono); }
-.fila-vuelo__dia { display: block; font: 500 .72rem/1.3 var(--mono); color: var(--suave); }
+.fila-vuelo__hora { grid-area: hora; align-self: start; font: 600 1.5rem/1 var(--mono); padding-top: .15rem; }
+.fila-vuelo__dia { display: block; margin-top: .3rem; font: 500 .72rem/1.3 var(--mono); color: var(--suave); }
+.fila-vuelo > .ruta { grid-area: ruta; }
 .ruta { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
 .ruta__ciudad { display: grid; line-height: 1.05; }
 .ruta__ciudad strong { font: 800 2rem/1 var(--titulos); letter-spacing: -.01em; }
 .ruta__ciudad span { color: var(--suave); font-size: .8rem; }
 .ruta__flecha { color: var(--rojo); font-size: 1.2rem; }
-.fila-vuelo__meta { color: var(--suave); font: 500 .8rem/1.55 var(--mono); }
+.fila-vuelo__meta { grid-area: meta; display: flex; flex-wrap: wrap; align-items: center; gap: .15rem .9rem; color: var(--suave); font: 500 .8rem/1.5 var(--mono); }
 .fila-vuelo__meta b { color: var(--tinta); font-weight: 600; }
-.fila-vuelo__puerta { font: 600 1.3rem/1 var(--mono); }
-.fila-vuelo__precio { text-align: right; font: 600 1.15rem/1.1 var(--mono); color: var(--tinta); }
+.fila-vuelo__dato { display: grid; gap: .25rem; justify-items: start; }
+.fila-vuelo__dato small { color: var(--suave); font: 600 .62rem/1 var(--fuente); letter-spacing: .14em; text-transform: uppercase; }
+.fila-vuelo__dato b { font: 600 1.3rem/1 var(--mono); }
+.fila-vuelo__puerta { grid-area: puerta; }
+.fila-vuelo__cupos { grid-area: cupos; }
+.fila-vuelo__precio { grid-area: precio; text-align: right; font: 600 1.25rem/1.1 var(--mono); color: var(--tinta); }
 .fila-vuelo__precio small { display: block; color: var(--suave); font: 400 .7rem/1.3 var(--fuente); }
-.fila-vuelo__acciones { grid-column: 1 / -1; display: flex; gap: .5rem; flex-wrap: wrap; }
-.detalle { grid-column: 1 / -1; background: var(--superficie-2); border-radius: 3px; padding: .75rem 1rem; font-size: .9rem; }
+.fila-vuelo__acciones { grid-area: acciones; display: flex; gap: .5rem; flex-wrap: wrap; justify-content: flex-end; }
+.detalle { grid-area: detalle; background: var(--superficie-2); border-radius: 3px; padding: .75rem 1rem; font-size: .9rem; }
 .detalle dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: .2rem 1rem; }
 .detalle dt { color: var(--rojo); font: 600 .72rem/1.9 var(--fuente); letter-spacing: .12em; text-transform: uppercase; }
 .detalle dd { margin: 0; }
@@ -327,9 +336,11 @@ details.consulta pre { background: var(--tinta); color: var(--superficie); paddi
   .heroe { grid-template-columns: 1fr; } .heroe h1 { font-size: 2.7rem; }
   .postales { height: 340px; max-width: 520px; }
   .flujo, .red, .vuelos-cabecera { grid-template-columns: 1fr; }
-  .fila-vuelo { grid-template-columns: 1fr auto; }
-  .fila-vuelo__hora, .ruta, .fila-vuelo__meta, .fila-vuelo__puerta, .fila-vuelo__precio, .fila-vuelo__acciones, .detalle { grid-column: 1 / -1; }
-  .fila-vuelo__precio { text-align: left; }
+  .fila-vuelo { grid-template-columns: 1fr 1fr 1fr;
+    grid-template-areas: "hora hora precio" "ruta ruta ruta" "meta meta meta" "puerta cupos acciones" "detalle detalle detalle"; }
+  .fila-vuelo__hora { display: flex; align-items: baseline; gap: .6rem; padding-top: 0; }
+  .fila-vuelo__dia { margin-top: 0; }
+  .fila-vuelo__acciones { flex-wrap: nowrap; }
 }
 @media (max-width: 640px) {
   .pase { grid-template-columns: 1fr; }
