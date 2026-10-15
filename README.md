@@ -5,7 +5,7 @@ de una aerolínea ficticia que recorre la interfaz, la lógica y la persistencia
 del punto 3**. Todo corre sobre exactamente las 26 tablas del script que generó Enterprise Architect
 (`sql/modelo-relacional-sqlserver.sql`), sin añadir ni cambiar ninguna.
 
-**Demo en línea:** _(se completa al publicar en GitHub Pages)_
+**Demo en línea:** https://samuel10201.github.io/data-airlines/
 
 La demo no necesita servidor: el mismo código Python se ejecuta dentro del navegador con
 [Pyodide](https://pyodide.org). La primera visita descarga unos 8 MB y tarda unos segundos; las siguientes
