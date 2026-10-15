@@ -67,17 +67,17 @@ async function hacer(accion) {
   try { await accion(); } catch (e) { console.error(e); aviso(e.message, "error"); }
 }
 
-/* ---------- tema de color: automático, claro u oscuro ---------- */
+/* ---------- tema de color: claro (por defecto), oscuro o el del sistema ---------- */
 
-const TEMAS = ["auto", "claro", "oscuro"];
-const temaActual = () => document.documentElement.dataset.tema || "auto";
+const TEMAS = ["claro", "oscuro", "auto"];
+const temaActual = () => document.documentElement.dataset.tema || "claro";
 function pintarBotonTema() {
   $("#tema").textContent = `Tema: ${{ auto: "Auto", claro: "Claro", oscuro: "Oscuro" }[temaActual()]}`;
 }
 function alternarTema() {
   const siguiente = TEMAS[(TEMAS.indexOf(temaActual()) + 1) % TEMAS.length];
-  if (siguiente === "auto") delete document.documentElement.dataset.tema; else document.documentElement.dataset.tema = siguiente;
-  try { siguiente === "auto" ? localStorage.removeItem("data-delta:tema") : localStorage.setItem("data-delta:tema", siguiente); } catch { /* sin almacenamiento */ }
+  document.documentElement.dataset.tema = siguiente;
+  try { localStorage.setItem("data-delta:tema", siguiente); } catch { /* sin almacenamiento */ }
   pintarBotonTema();
 }
 

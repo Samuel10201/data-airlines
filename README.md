@@ -18,7 +18,7 @@ La interfaz usa el vocabulario del correo aéreo: papel crema, tinta, el rojo y 
 sellos y postales. Los pases de abordar, el tablero de salidas y las etiquetas de maleta están dibujados con CSS y SVG; el mapa de
 rutas se calcula con las coordenadas de la tabla `aeropuerto`. La tipografía es Archivo en su versión ensanchada para títulos y códigos de aeropuerto, Public Sans para el texto y Overpass Mono para
 horas, valores y etiquetas. Tiene tema claro y oscuro (el oscuro es el mismo papel de noche, con
-los mismos matices) y un botón *Tema* que alterna entre Auto (el del sistema), Claro y Oscuro.
+los mismos matices). El claro es el predeterminado; el botón *Tema* alterna entre Claro, Oscuro y Auto (el del sistema).
 
 Las fotos de las ocho ciudades (`img/ciudades/`) son de Wikimedia Commons con licencia libre; el autor y la licencia de cada una están
 en `img/ciudades/creditos.json` y en el pie de la página.

@@ -9,9 +9,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,100..125,500..900;1,100..125,500..900&family=Overpass+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="estilos.css?v=20261015c">
+  <link rel="stylesheet" href="estilos.css?v=20261015d">
   <script>
-    /* El tema se aplica antes de pintar para que no parpadee: "claro", "oscuro" o, sin elegir, el del sistema. */
+    /* El tema se aplica antes de pintar para que no parpadee: el elegido ("claro", "oscuro" o "auto", el del sistema) o, sin elegir, el claro. */
     try { const t = localStorage.getItem("data-delta:tema"); if (t) document.documentElement.dataset.tema = t; } catch (e) { /* sin almacenamiento */ }
   </script>
 </head>
@@ -49,6 +49,6 @@
     </div>
   </div>
   <!--MODO_SERVIDOR-->
-  <script src="arranque.js?v=20261015c"></script>
+  <script src="arranque.js?v=20261015d"></script>
 </body>
 </html>

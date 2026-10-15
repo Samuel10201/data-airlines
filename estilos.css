@@ -1,7 +1,7 @@
 /* Data-Delta Airlines · prototipo.
    Identidad "correo aéreo": papel crema, tinta, el rojo y el azul de las cartas aéreas, franjas diagonales, sellos y postales.
    El tema claro es el papel; el oscuro es el mismo papel de noche (mismos matices, sin negro puro ni neón).
-   Los tokens viven en :root; el tema sigue al sistema y se puede forzar con data-tema="claro" | "oscuro". */
+   Los tokens viven en :root; el tema por defecto es el claro; data-tema="oscuro" lo fuerza y data-tema="auto" sigue al sistema. */
 :root {
   --fondo: #efe5cf;
   --superficie: #fbf6e8;
@@ -25,7 +25,7 @@
   --franja: repeating-linear-gradient(135deg, var(--rojo) 0 14px, var(--superficie) 14px 22px, var(--azul) 22px 36px, var(--superficie) 36px 44px);
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-tema="claro"]) {
+  :root[data-tema="auto"] {
     --fondo: #171a22; --superficie: #1f232e; --superficie-2: #2a2f3d;
     --tinta: #f1e8d3; --suave: #aaa391; --linea: #3b4152;
     --rojo: #e8665b; --rojo-sobre: #1b0d0b; --azul: #86a9e4; --verde: #7cc29b;
