@@ -41,9 +41,9 @@ def _formatear(f):
 
 
 def listar_aeropuertos(conexion):
-    """Aeropuertos con su ciudad y país, ordenados por ciudad."""
+    """Aeropuertos con su ciudad, país y coordenadas (para dibujar el mapa de rutas), ordenados por ciudad."""
     return [dict(r) for r in conexion.execute(
-        "SELECT a.id_aeropuerto, a.codigo, a.nombre, c.nombre AS ciudad, c.pais FROM aeropuerto a "
+        "SELECT a.id_aeropuerto, a.codigo, a.nombre, a.latitud, a.longitud, c.nombre AS ciudad, c.pais FROM aeropuerto a "
         "JOIN ciudad c ON c.id_ciudad = a.id_ciudad ORDER BY c.nombre")]
 
 

@@ -9,7 +9,7 @@ import re
 import traceback
 from urllib.parse import parse_qs, urlparse
 
-from . import aeropuerto, sesion, ventas, vuelos
+from . import aeropuerto, dw, sesion, ventas, vuelos
 from .dominios import NOMBRE_AEROLINEA, ErrorNegocio, ErrorPermiso, ErrorSesion, validar_entero
 
 
@@ -106,6 +106,27 @@ def construir_rutas():
     @ruta("GET", "/api/equipaje")
     def rastrear(c):
         return aeropuerto.consultar_equipaje(c.bd, c.consulta.get("etiqueta"))
+
+    # --- recorrido C: Data Warehouse
+    @ruta("GET", "/api/dw")
+    def estado_del_dw(c):
+        return dw.estado_dw(c.bd)
+
+    @ruta("POST", "/api/dw/cargar")
+    def cargar_el_dw(c):
+        return dw.cargar_dw(c.bd)
+
+    @ruta("GET", "/api/dw/ingresos")
+    def ingresos(c):
+        return dw.reporte_ingresos(c.bd, _entero_opcional(c.consulta.get("anio"), "anio"))
+
+    @ruta("GET", "/api/dw/reservaciones")
+    def reservaciones(c):
+        return dw.reporte_reservaciones(c.bd, _entero_opcional(c.consulta.get("anio"), "anio"))
+
+    @ruta("GET", "/api/dw/millas")
+    def millas(c):
+        return dw.reporte_millas(c.bd, _entero_opcional(c.consulta.get("anio"), "anio"))
 
     return r
 

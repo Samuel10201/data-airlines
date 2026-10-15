@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Prototipo de Data-Delta Airlines: reservar y comprar vuelos, abordaje y seguimiento de maletas sobre el modelo relacional del Parcial 2 de Diseño de Software I.">
+  <meta name="description" content="Prototipo de Data-Delta Airlines: reservar y comprar vuelos, abordaje, seguimiento de maletas y un Data Warehouse con los reportes de ingresos, reservaciones y millas, sobre el modelo relacional del Parcial 2 de Diseño de Software I.">
   <title>Data-Delta Airlines · Prototipo</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f4c5c'/%3E%3Cpath d='M6 22 26 9l-5 15-4-6z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ffb81c'/%3E%3Cpath d='M6 22 26 9l-5 15-4-6z' fill='%230b2540'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
@@ -19,8 +19,8 @@
   <header class="barra">
     <div class="barra__interior">
       <a class="marca" href="./" aria-label="Data-Delta Airlines, inicio">
-        <svg class="marca__icono" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M6 22 26 9l-5 15-4-6z"/></svg>
-        <span><strong>Data-Delta</strong> Airlines<small>Prototipo · Diseño de Software I</small></span>
+        <svg class="marca__icono" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6"/><path d="M6 22 26 9l-5 15-4-6z"/></svg>
+        <span class="marca__texto"><strong>Data-Delta</strong><span>Airlines</span></span>
       </a>
       <nav id="navegacion" class="nav" aria-label="Secciones"></nav>
       <div id="sesion" class="sesion"></div>
@@ -29,13 +29,13 @@
   <main id="principal" class="principal" tabindex="-1"></main>
   <footer class="pie">
     <p id="pie-bd"></p>
-    <p>Aerolínea ficticia. Prototipo académico del Parcial 2 (Universidad del Norte): no hay pagos reales ni autenticación, porque el modelo relacional no tiene credenciales.</p>
+    <p>Aerolínea ficticia. Prototipo académico del Parcial 2 de Diseño de Software I (Universidad del Norte): no hay pagos reales ni autenticación, porque el modelo relacional no tiene credenciales.</p>
   </footer>
   <div id="avisos" class="avisos" role="status" aria-live="polite"></div>
 
   <div id="carga" class="carga" role="status" aria-live="polite">
     <div class="carga__caja">
-      <svg class="marca__icono marca__icono--grande" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M6 22 26 9l-5 15-4-6z"/></svg>
+      <svg class="marca__icono marca__icono--grande" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="6"/><path d="M6 22 26 9l-5 15-4-6z"/></svg>
       <h1 id="carga-titulo">Preparando el prototipo…</h1>
       <div class="carga__barra" aria-hidden="true"><i></i></div>
       <p id="carga-paso">Iniciando…</p>

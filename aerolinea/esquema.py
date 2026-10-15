@@ -61,8 +61,10 @@ def _traducir_columna(linea):
     return nombre, " ".join(partes), False
 
 
-def traducir_script(script):
-    """Devuelve (sentencias SQLite, resumen de lo que el script declara)."""
+def traducir_script(script, esquema=None):
+    """Devuelve (sentencias SQLite, resumen de lo que el script declara).
+    Con `esquema` (p. ej. "dw") las tablas y los índices se crean en esa base adjunta."""
+    prefijo = f"{esquema}." if esquema else ""
     tablas, orden, identidad, pks, unicos, fks, indices, omitidos = {}, [], {}, {}, {}, {}, [], 0
     for lote in _lotes(script):
         if lote.upper().startswith("IF EXISTS"):
@@ -84,7 +86,7 @@ def traducir_script(script):
                 f"CONSTRAINT {nombre} FOREIGN KEY ({_columnas(col)}) REFERENCES {padre} ({_columnas(colp)}) "
                 f"ON DELETE {borrar.upper()} ON UPDATE {actualizar.upper()}")
         elif m := RE_INDICE.match(lote):
-            indices.append(f"CREATE INDEX {m.group(1)} ON {m.group(2)} ({_columnas(m.group(3))})")
+            indices.append(f"CREATE INDEX {prefijo}{m.group(1)} ON {m.group(2)} ({_columnas(m.group(3))})")
         else:
             raise ValueError(f"Sentencia del script sin regla de traducción: {lote[:90]!r}")
 
@@ -100,7 +102,7 @@ def traducir_script(script):
             raise ValueError(f"La llave primaria de {tabla} no coincide con su columna IDENTITY.")
         definiciones += [f"CONSTRAINT {n} UNIQUE ({c})" for n, c in unicos.get(tabla, [])]
         definiciones += fks.get(tabla, [])
-        sentencias.append(f"CREATE TABLE {tabla} (\n    " + ",\n    ".join(definiciones) + "\n)")
+        sentencias.append(f"CREATE TABLE {prefijo}{tabla} (\n    " + ",\n    ".join(definiciones) + "\n)")
     sentencias += indices
     declarado = {"tablas": len(orden), "llaves_foraneas": sum(len(v) for v in fks.values()),
                  "unicos": sum(len(v) for v in unicos.values()), "indices": len(indices),
@@ -108,21 +110,26 @@ def traducir_script(script):
     return sentencias, declarado
 
 
-def verificar(conexion):
-    """Lee el catálogo de SQLite y cuenta tablas, llaves foráneas, restricciones únicas e índices."""
+def verificar(conexion, esquema="main"):
+    """Lee el catálogo de SQLite (de la base principal o de la adjunta `esquema`) y cuenta tablas, llaves
+    foráneas, restricciones únicas e índices."""
     tablas = [r[0] for r in conexion.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
-    fks = sum(len(conexion.execute(f"PRAGMA foreign_key_list({t})").fetchall()) for t in tablas)
-    unicos = sum(1 for t in tablas for i in conexion.execute(f"PRAGMA index_list({t})") if i[3] == "u")
-    indices = conexion.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND sql IS NOT NULL").fetchone()[0]
+        f"SELECT name FROM {esquema}.sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
+    fks = sum(len(conexion.execute(f"PRAGMA {esquema}.foreign_key_list({t})").fetchall()) for t in tablas)
+    unicos = sum(1 for t in tablas for i in conexion.execute(f"PRAGMA {esquema}.index_list({t})") if i[3] == "u")
+    indices = conexion.execute(
+        f"SELECT COUNT(*) FROM {esquema}.sqlite_master WHERE type='index' AND sql IS NOT NULL").fetchone()[0]
     return {"tablas": len(tablas), "llaves_foraneas": fks, "unicos": unicos, "indices": indices}
 
 
-def conectar(ruta_bd):
-    """Abre una conexión con las llaves foráneas activas y filas tipo diccionario."""
+def conectar(ruta_bd, ruta_dw=None):
+    """Abre una conexión con las llaves foráneas activas y filas tipo diccionario.
+    Si se da `ruta_dw` (":memory:" o un archivo) se adjunta como la base `dw` (el Data Warehouse)."""
     conexion = sqlite3.connect(ruta_bd, timeout=10, isolation_level=None)
     conexion.row_factory = sqlite3.Row
     conexion.execute("PRAGMA foreign_keys = ON")
+    if ruta_dw is not None:
+        conexion.execute("ATTACH DATABASE ? AS dw", (str(ruta_dw),))
     return conexion
 
 
@@ -141,10 +148,11 @@ class transaccion:
         return False
 
 
-def crear_esquema(conexion, script):
+def crear_esquema(conexion, script, esquema=None):
     """Ejecuta el script traducido sobre una conexión abierta y lo verifica contra el catálogo.
-    Devuelve el resumen verificado; lanza ValueError si el catálogo no coincide con el script."""
-    sentencias, declarado = traducir_script(script)
+    Devuelve el resumen verificado; lanza ValueError si el catálogo no coincide con el script.
+    Con `esquema` ("dw") lo crea en la base adjunta con ese nombre."""
+    sentencias, declarado = traducir_script(script, esquema)
     conexion.execute("BEGIN")
     try:
         for sentencia in sentencias:
@@ -153,7 +161,7 @@ def crear_esquema(conexion, script):
         conexion.execute("ROLLBACK")
         raise
     conexion.execute("COMMIT")
-    real = verificar(conexion)
+    real = verificar(conexion, esquema or "main")
     for clave in ("tablas", "llaves_foraneas", "unicos"):
         if real[clave] != declarado[clave]:
             raise ValueError(f"El catálogo de SQLite tiene {real[clave]} {clave} y el script declara {declarado[clave]}.")

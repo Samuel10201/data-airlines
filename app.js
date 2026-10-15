@@ -1,15 +1,18 @@
 /* Interfaz de Data-Delta Airlines. Una sola página; todo pasa por la API JSON /api/...
  * Recorrido A (cliente y agente): buscar vuelo -> reservar -> comprar tiquete -> cancelar.
- * Recorrido B (aeropuerto): abordaje -> recibir maletas -> escanear -> rastrear por etiqueta. */
+ * Recorrido B (aeropuerto): abordaje -> recibir maletas -> escanear -> rastrear por etiqueta.
+ * Recorrido C (todos): cargar el Data Warehouse desde la base y ver 4a, 4b y 4c. */
 "use strict";
 
 const estado = { actor: null, usuarios: null, vueloAeropuerto: null, aeropuertos: [], vista: "inicio", info: null,
-  filtros: { origen: "", destino: "", fecha: "" }, clienteDelAgente: "", vuelos: null };
+  filtros: { origen: "", destino: "", fecha: "" }, clienteDelAgente: "", vuelos: null, rutas: null,
+  reporte: "ingresos", anioDw: "" };
 
 const $ = (selector) => document.querySelector(selector);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const usd = (n) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "USD" }).format(n);
+const num = (n, decimales = 0) => new Intl.NumberFormat("es-CO", { maximumFractionDigits: decimales }).format(n);
 const DIAS = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
 const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 const aFecha = (t) => new Date(t.replace(" ", "T"));
@@ -20,6 +23,7 @@ const duracion = (a, b) => {
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} min`;
 };
 const TIPO_ACTOR = { cliente: "Cliente", agente: "Agente de viaje", aeropuerto: "Aeropuerto" };
+const reducirMovimiento = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** Llama a la API. Lanza Error con el mensaje del servidor; 401 cierra la sesión local. */
 async function api(metodo, ruta, cuerpo) {
@@ -49,14 +53,74 @@ async function hacer(accion) {
   try { await accion(); } catch (e) { console.error(e); aviso(e.message, "error"); }
 }
 
+/* ---------- mapa de rutas (con las coordenadas de aeropuerto del modelo) ---------- */
+
+const MAPA = { lon0: -104, lon1: -70, lat0: 2, lat1: 36, ancho: 600 };
+const KM = MAPA.ancho / (MAPA.lon1 - MAPA.lon0);
+const proyectar = (lat, lon) => [(lon - MAPA.lon0) * KM, (MAPA.lat1 - lat) * KM];
+
+/** Arco entre dos puntos proyectados: una curva cuadrática que se arquea hacia el norte. */
+function arco([x1, y1], [x2, y2]) {
+  const dx = x2 - x1, dy = y2 - y1, largo = Math.hypot(dx, dy) || 1;
+  let nx = -dy / largo, ny = dx / largo;
+  if (ny > 0) { nx = -nx; ny = -ny; }
+  const cx = (x1 + x2) / 2 + nx * largo * 0.22, cy = (y1 + y2) / 2 + ny * largo * 0.22;
+  return `M${x1.toFixed(1)} ${y1.toFixed(1)} Q${cx.toFixed(1)} ${cy.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`;
+}
+
+/** Mapa técnico: malla de latitud y longitud, rutas del sistema (tenues) y las que se están viendo (ámbar). */
+function htmlMapa(vivas = new Set(), activo = null) {
+  const puntos = new Map(estado.aeropuertos.map((a) => [a.id_aeropuerto, { ...a, p: proyectar(a.latitud, a.longitud) }]));
+  const malla = [];
+  for (let lon = -100; lon <= -70; lon += 5) {
+    const x = (lon - MAPA.lon0) * KM;
+    malla.push(`<line class="mapa__malla" x1="${x}" y1="0" x2="${x}" y2="${MAPA.ancho}"/><text class="mapa__etiqueta-malla" x="${x + 2}" y="595">${-lon}°W</text>`);
+  }
+  for (let lat = 5; lat <= 35; lat += 5) {
+    const y = (MAPA.lat1 - lat) * KM;
+    malla.push(`<line class="mapa__malla" x1="0" y1="${y}" x2="${MAPA.ancho}" y2="${y}"/><text class="mapa__etiqueta-malla" x="3" y="${y - 3}">${lat}°N</text>`);
+  }
+  const pares = estado.rutas ?? [];
+  const rutas = pares.map(([o, d]) => {
+    const a = puntos.get(o), b = puntos.get(d);
+    return a && b ? `<path class="mapa__ruta ${vivas.has(`${o}-${d}`) ? "mapa__ruta--viva" : ""}" d="${arco(a.p, b.p)}"/>` : "";
+  });
+  const viva = pares.find(([o, d]) => vivas.has(`${o}-${d}`)) ?? pares[0];
+  let avion = "";
+  if (viva && !reducirMovimiento && puntos.get(viva[0]) && puntos.get(viva[1])) {
+    avion = `<path class="mapa__avion" d="M-7 -5 L9 0 L-7 5 L-3 0z"><animateMotion dur="7s" repeatCount="indefinite" rotate="auto" path="${arco(puntos.get(viva[0]).p, puntos.get(viva[1]).p)}"/></path>`;
+  }
+  // Los aeropuertos colombianos quedan muy juntos: los del oeste llevan la etiqueta a la izquierda para que no se pisen.
+  const marcas = [...puntos.values()].map((a) => {
+    const [x, y] = a.p;
+    const izquierda = a.longitud < -75 && a.longitud > -80;
+    const lado = izquierda ? "end" : "start", dx = izquierda ? -10 : 10;
+    return `<g data-accion="mapa-aeropuerto" data-id="${a.id_aeropuerto}"><title>${esc(a.ciudad)} (${esc(a.codigo)}) · ${esc(a.pais)}</title>
+      <circle class="mapa__punto ${activo === a.id_aeropuerto ? "mapa__punto--activo" : ""}" cx="${x}" cy="${y}" r="6"/>
+      <text class="mapa__codigo" text-anchor="${lado}" x="${x + dx}" y="${y + 5}">${esc(a.codigo)}</text>
+      <text class="mapa__ciudad" text-anchor="${lado}" x="${x + dx}" y="${y + 17}">${esc(a.ciudad)}</text></g>`;
+  });
+  return `<div class="mapa"><svg viewBox="0 0 ${MAPA.ancho} ${MAPA.ancho}" role="img" aria-label="Mapa de rutas entre los aeropuertos del sistema">${malla.join("")}${rutas.join("")}${marcas.join("")}${avion}</svg>
+    <div class="mapa__leyenda"><span>${pares.length} rutas · ${estado.aeropuertos.length} aeropuertos</span><span>coordenadas de <b>aeropuerto</b></span></div></div>`;
+}
+
+async function cargarRutas() {
+  if (!estado.aeropuertos.length) estado.aeropuertos = (await api("GET", "/api/aeropuertos")).aeropuertos;
+  if (!estado.rutas) {
+    const { vuelos } = await api("GET", "/api/vuelos");
+    estado.rutas = [...new Set(vuelos.map((v) => `${v.origen.id_aeropuerto}-${v.destino.id_aeropuerto}`))]
+      .map((par) => par.split("-").map(Number));
+  }
+}
+
 /* ---------- sesión y navegación ---------- */
 
 function menu() {
-  if (!estado.actor) return [["inicio", "Inicio"], ["vuelos", "Vuelos"], ["rastreo", "Rastrear maleta"]];
+  if (!estado.actor) return [["inicio", "Inicio"], ["vuelos", "Vuelos"], ["rastreo", "Rastrear maleta"], ["analitica", "Analítica"]];
   if (estado.actor.tipo === "aeropuerto") {
-    return [["aeropuerto", "Embarque y equipaje"], ["vuelos", "Vuelos"], ["rastreo", "Rastrear maleta"]];
+    return [["aeropuerto", "Embarque y equipaje"], ["vuelos", "Vuelos"], ["rastreo", "Rastrear maleta"], ["analitica", "Analítica"]];
   }
-  return [["vuelos", "Buscar vuelos"], ["reservas", "Mis reservas"], ["rastreo", "Rastrear maleta"]];
+  return [["vuelos", "Buscar vuelos"], ["reservas", "Mis reservas"], ["rastreo", "Rastrear maleta"], ["analitica", "Analítica"]];
 }
 
 function dibujarNav() {
@@ -76,10 +140,9 @@ function opcionesActores() {
 function dibujarSesion() {
   const a = estado.actor;
   $("#sesion").innerHTML = a
-    ? `<span>Entró como <strong>${esc(a.nombre)}</strong> <span class="chip chip--info">${esc(TIPO_ACTOR[a.tipo])}</span></span>
+    ? `<span>Entró como <strong>${esc(a.nombre)}</strong> <span class="chip">${esc(TIPO_ACTOR[a.tipo])}</span></span>
        <button type="button" class="boton boton--sec boton--chico" data-accion="salir">Salir</button>`
-    : `<label class="campo">
-       <select id="selector-actor" aria-label="Entrar como">${opcionesActores()}</select></label>`;
+    : `<label class="campo"><select id="selector-actor" aria-label="Entrar como">${opcionesActores()}</select></label>`;
 }
 
 async function entrar(valor) {
@@ -107,79 +170,93 @@ async function ir(vista) {
   $("#principal").focus({ preventScroll: true });
 }
 
-/* ---------- vistas ---------- */
+/* ---------- inicio ---------- */
 
-function vistaInicio() {
+async function vistaInicio() {
+  await cargarRutas();
   const u = estado.usuarios;
-  const tarjeta = (titulo, texto, tipo, opciones) => `
-    <div class="tarjeta"><h2>${titulo}</h2><p class="ayuda">${texto}</p>
+  const mostrador = (titulo, codigo, texto, tipo, opciones) => `
+    <div class="tarjeta mostrador"><h2>${titulo} <small>${codigo}</small></h2><p class="ayuda">${texto}</p>
       <select data-entrada="${tipo}" aria-label="${esc(titulo)}">${opciones}</select>
       <button type="button" class="boton" data-accion="entrar-tarjeta" data-tipo="${tipo}">Entrar</button></div>`;
   $("#principal").innerHTML = `
     <section class="heroe">
-      <h1>Reserve, compre y siga su maleta</h1>
-      <p>Prototipo de Data-Delta Airlines sobre el modelo relacional del Parcial 2: dos recorridos completos, de la interfaz a la base de datos.
-      No hay claves: elija con quién entrar.</p>
+      <div>
+        <h1>Reserve. Embarque.<br><em>Siga su maleta.</em></h1>
+        <p>Prototipo de Data-Delta Airlines sobre el modelo relacional del Parcial 2: dos recorridos de la interfaz a la base de datos
+        y un Data Warehouse que responde ingresos, reservaciones y millas. No hay claves: elija con quién entrar.</p>
+        <p class="ayuda mono">El mapa dibuja las rutas con las coordenadas de la tabla <b>aeropuerto</b>.</p>
+      </div>
+      ${htmlMapa()}
     </section>
     <div class="entradas">
-      ${tarjeta("Soy cliente", "Busque un vuelo, reserve, compre su tiquete y cancélelo si cambia de plan.", "cliente",
+      ${mostrador("Soy cliente", "A · 01", "Busque un vuelo, reserve, compre su tiquete y cancélelo si cambia de plan.", "cliente",
         u.clientes.map((c) => `<option value="${c.id_cliente}">${esc(c.nombre)}</option>`).join(""))}
-      ${tarjeta("Soy agente de viaje", "Reserve y venda a nombre de un cliente; gestiona sus tiquetes.", "agente",
+      ${mostrador("Soy agente de viaje", "A · 02", "Reserve y venda a nombre de un cliente; gestiona sus tiquetes.", "agente",
         u.agentes.map((a) => `<option value="${a.id_agente_viaje}">${esc(a.nombre)}</option>`).join(""))}
-      ${tarjeta("Trabajo en un aeropuerto", "Registre el abordaje, reciba maletas y escanéelas en el origen y en el destino.", "aeropuerto",
+      ${mostrador("Trabajo en un aeropuerto", "B · 01", "Registre el abordaje, reciba maletas y escanéelas en el origen y en el destino.", "aeropuerto",
         u.aeropuertos.map((a) => `<option value="${a.id_aeropuerto}">${esc(a.ciudad)} (${esc(a.codigo)})</option>`).join(""))}
     </div>
     <div class="pasos">
-      <div class="tarjeta"><h3>Recorrido A · Comprar y cancelar</h3><ol>
+      <div class="tarjeta"><h3><span>A</span> Comprar y cancelar</h3><ol>
         <li>Buscar un vuelo por origen, destino y fecha.</li><li>Reservar (el cupo aún no se ocupa).</li>
         <li>Comprar el tiquete: el valor sale de la distancia entre aeropuertos.</li><li>Cancelar mientras no haya abordado.</li></ol></div>
-      <div class="tarjeta"><h3>Recorrido B · Abordaje y maletas</h3><ol>
-        <li>En el aeropuerto de origen: registrar el abordaje y recibir cada maleta (queda su primera lectura).</li>
-        <li>En el destino: escanear la maleta (solo si el pasajero abordó).</li><li>Cualquiera puede rastrear una maleta por su etiqueta.</li></ol></div>
+      <div class="tarjeta"><h3><span>B</span> Abordaje y maletas</h3><ol>
+        <li>En el origen: registrar el abordaje y recibir cada maleta (queda su primera lectura).</li>
+        <li>En el destino: escanear la maleta, solo si el pasajero abordó.</li><li>Cualquiera rastrea una maleta por su etiqueta.</li></ol></div>
+      <div class="tarjeta"><h3><span>C</span> Analítica</h3><ol>
+        <li>Cargar el Data Warehouse desde la base.</li><li>Ver 4a ingresos y 4b reservaciones por ciudad y mes.</li>
+        <li>Ver 4c millas nacionales por pasajero y mes, con la consulta ejecutada.</li></ol></div>
     </div>`;
 }
 
-const tarjetaVuelo = (v) => {
+/* ---------- recorrido A: vuelos ---------- */
+
+const filaVuelo = (v) => {
   const a = estado.actor;
   const puedeReservar = a && (a.tipo === "cliente" || a.tipo === "agente");
-  return `<article class="tarjeta"><div class="vuelo">
-    <div>
-      <div class="ruta">
-        <div class="ruta__ciudad"><strong>${esc(v.origen.codigo)}</strong><span>${esc(v.origen.ciudad)} · ${esc(hora(v.salida_programada))}</span></div>
-        <span class="ruta__flecha" aria-hidden="true">→</span>
-        <div class="ruta__ciudad"><strong>${esc(v.destino.codigo)}</strong><span>${esc(v.destino.ciudad)} · ${esc(hora(v.llegada_programada))}</span></div>
-      </div>
-      <div class="meta"><span>${esc(dia(v.salida_programada))}</span><span>Vuelo ${esc(v.numero_vuelo)}</span>
-        <span>${esc(duracion(v.salida_programada, v.llegada_programada))}</span><span>${v.millas.toLocaleString("es-CO")} millas</span>
-        <span class="chip ${v.nacional ? "chip--info" : "chip--aviso"}">${v.nacional ? "Nacional" : "Internacional"}</span>
-        <span class="chip ${v.cupos_libres > 10 ? "chip--ok" : v.cupos_libres > 0 ? "chip--aviso" : "chip--malo"}">${v.cupos_libres} cupos</span></div>
+  const cupos = v.cupos_libres > 10 ? "ok" : v.cupos_libres > 0 ? "aviso" : "malo";
+  return `<article class="fila-vuelo">
+    <div class="fila-vuelo__hora">${esc(hora(v.salida_programada))}<span class="fila-vuelo__dia">${esc(dia(v.salida_programada))}</span></div>
+    <div class="ruta">
+      <div class="ruta__ciudad"><strong>${esc(v.origen.codigo)}</strong><span>${esc(v.origen.ciudad)}</span></div>
+      <span class="ruta__flecha" aria-hidden="true">→</span>
+      <div class="ruta__ciudad"><strong>${esc(v.destino.codigo)}</strong><span>${esc(v.destino.ciudad)} · ${esc(hora(v.llegada_programada))}</span></div>
     </div>
-    <div class="precio"><strong>${usd(v.valor)}</strong><span>por pasajero</span></div>
-    <div class="acciones">
-      ${puedeReservar ? `<button type="button" class="boton" data-accion="reservar" data-vuelo="${v.id_vuelo}">Reservar</button>` : ""}
-      <button type="button" class="boton boton--sec" data-accion="detalle" data-vuelo="${v.id_vuelo}" aria-expanded="false">Ver detalle</button>
+    <div class="fila-vuelo__meta">Vuelo <b>${esc(v.numero_vuelo)}</b><br>${esc(duracion(v.salida_programada, v.llegada_programada))} · ${num(v.millas, 0)} mi<br>
+      <span class="chip ${v.nacional ? "chip--info" : "chip--aviso"}">${v.nacional ? "Nacional" : "Internacional"}</span></div>
+    <div class="fila-vuelo__puerta">${esc(v.puerta || "—")}</div>
+    <div><span class="chip chip--${cupos}">${v.cupos_libres} cupos</span></div>
+    <div class="fila-vuelo__precio">${usd(v.valor)}<small>por pasajero</small></div>
+    <div class="fila-vuelo__acciones">
+      ${puedeReservar ? `<button type="button" class="boton boton--chico" data-accion="reservar" data-vuelo="${v.id_vuelo}">Reservar</button>` : ""}
+      <button type="button" class="boton boton--sec boton--chico" data-accion="detalle" data-vuelo="${v.id_vuelo}" aria-expanded="false">Ver detalle</button>
     </div>
     <div class="detalle" id="detalle-${v.id_vuelo}" hidden></div>
-  </div></article>`;
+  </article>`;
 };
 
 async function vistaVuelos() {
-  if (!estado.aeropuertos.length) estado.aeropuertos = (await api("GET", "/api/aeropuertos")).aeropuertos;
+  await cargarRutas();
   const f = estado.filtros;
   const lista = (sel) => `<option value="">Cualquiera</option>` + estado.aeropuertos.map((a) =>
     `<option value="${a.id_aeropuerto}" ${String(a.id_aeropuerto) === String(sel) ? "selected" : ""}>${esc(a.ciudad)} (${esc(a.codigo)})</option>`).join("");
   const agente = estado.actor?.tipo === "agente";
   $("#principal").innerHTML = `
-    <h1>Vuelos disponibles</h1>
-    <form id="filtros" class="filtros">
-      <label class="campo">Origen<select name="origen">${lista(f.origen)}</select></label>
-      <label class="campo">Destino<select name="destino">${lista(f.destino)}</select></label>
-      <label class="campo">Fecha<input type="date" name="fecha" value="${esc(f.fecha)}"></label>
-      ${agente ? `<label class="campo">Reservar a nombre de<select name="cliente" id="cliente-agente">${
-        estado.usuarios.clientes.map((c) => `<option value="${c.id_cliente}" ${String(c.id_cliente) === String(estado.clienteDelAgente) ? "selected" : ""}>${esc(c.nombre)}</option>`).join("")}</select></label>` : ""}
-      <button type="submit" class="boton">Buscar</button>
-    </form>
-    <div id="resultados" class="rejilla"></div>
+    <h1>Salidas</h1>
+    <div class="vuelos-cabecera">
+      <div><form id="filtros" class="filtros">
+        <label class="campo">Origen<select name="origen">${lista(f.origen)}</select></label>
+        <label class="campo">Destino<select name="destino">${lista(f.destino)}</select></label>
+        <label class="campo">Fecha<input type="date" name="fecha" value="${esc(f.fecha)}"></label>
+        ${agente ? `<label class="campo">Reservar a nombre de<select name="cliente" id="cliente-agente">${
+          estado.usuarios.clientes.map((c) => `<option value="${c.id_cliente}" ${String(c.id_cliente) === String(estado.clienteDelAgente) ? "selected" : ""}>${esc(c.nombre)}</option>`).join("")}</select></label>` : ""}
+        <button type="submit" class="boton">Buscar</button>
+      </form>
+      <p class="ayuda">Las rutas en ámbar son las que cumplen la búsqueda. Haga clic en un aeropuerto del mapa para usarlo como origen.</p></div>
+      <div id="mapa-vuelos"></div>
+    </div>
+    <div id="resultados"></div>
     ${estado.actor ? "" : '<p class="ayuda">Para reservar, entre como cliente o agente de viaje.</p>'}`;
   await buscarVuelos();
 }
@@ -189,7 +266,10 @@ async function buscarVuelos() {
   const consulta = new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString();
   const { vuelos } = await api("GET", `/api/vuelos${consulta ? "?" + consulta : ""}`);
   estado.vuelos = vuelos;
-  $("#resultados").innerHTML = vuelos.length ? vuelos.map(tarjetaVuelo).join("")
+  const vivas = new Set(vuelos.map((v) => `${v.origen.id_aeropuerto}-${v.destino.id_aeropuerto}`));
+  $("#mapa-vuelos").innerHTML = htmlMapa(vivas, f.origen ? Number(f.origen) : null);
+  $("#resultados").innerHTML = vuelos.length
+    ? `<div class="tablero"><div class="tablero__cabecera"><span>Salida</span><span>Ruta</span><span>Vuelo</span><span>Puerta</span><span>Cupos</span><span style="text-align:right">Valor</span></div>${vuelos.map(filaVuelo).join("")}</div>`
     : '<div class="tarjeta vacio">No hay vuelos con esos filtros. Pruebe con otra fecha o quite algún filtro.</div>';
 }
 
@@ -199,46 +279,66 @@ async function alternarDetalle(id, boton) {
   const { vuelo: v } = await api("GET", `/api/vuelos/${id}`);
   caja.innerHTML = `<dl><dt>Avión</dt><dd>${esc(v.avion.modelo)} · ${esc(v.avion.matricula)} · ${v.avion.capacidad} asientos</dd>
     <dt>Pilotos</dt><dd>${v.pilotos.map(esc).join(", ") || "—"}</dd>
-    <dt>Tripulación de cabina</dt><dd>${v.tcp.map(esc).join(", ") || "—"}</dd>
+    <dt>Cabina</dt><dd>${v.tcp.map(esc).join(", ") || "—"}</dd>
     <dt>Puerta</dt><dd>${esc(v.puerta || "por asignar")}</dd></dl>`;
   caja.hidden = false;
   boton.setAttribute("aria-expanded", "true");
 }
 
-const CHIP_ESTADO = { reservada: ["aviso", "Reservada"], comprado: ["ok", "Tiquete comprado"],
-  abordado: ["info", "Abordó"], cancelado: ["malo", "Cancelado"] };
+/* ---------- recorrido A: pases de abordar ---------- */
+
+const SELLO = { reservada: ["aviso", "Reservada"], comprado: ["ok", "Comprado"], abordado: ["info", "Abordó"], cancelado: ["malo", "Cancelado"] };
 
 async function vistaReservas() {
+  await cargarRutas();
   const { reservas } = await api("GET", "/api/reservas");
   const agente = estado.actor.tipo === "agente";
   const ahora = new Date();
-  const tarjeta = (r) => {
-    const [clase, texto] = CHIP_ESTADO[r.estado];
+  const pase = (r) => {
+    const [clase, texto] = SELLO[r.estado];
     const t = r.tiquete, v = r.vuelo;
     const yaSalio = aFecha(v.salida_programada) <= ahora;
-    return `<article class="tarjeta"><div class="vuelo">
-      <div>
-        <div class="ruta"><div class="ruta__ciudad"><strong>${esc(v.origen.codigo)}</strong><span>${esc(v.origen.ciudad)} · ${esc(hora(v.salida_programada))}</span></div>
-          <span class="ruta__flecha" aria-hidden="true">→</span>
-          <div class="ruta__ciudad"><strong>${esc(v.destino.codigo)}</strong><span>${esc(v.destino.ciudad)} · ${esc(hora(v.llegada_programada))}</span></div></div>
-        <div class="meta"><span>${esc(dia(v.salida_programada))}</span><span>Vuelo ${esc(v.numero_vuelo)}</span>
-          ${agente ? `<span>Pasajero: <strong>${esc(r.cliente.nombre)}</strong></span>` : ""}
-          <span>Reserva #${r.id_reserva}</span>${t ? `<span>Tiquete #${t.id_tiquete}</span>` : ""}
-          ${t?.etiquetas.length ? `<span>Maletas: ${t.etiquetas.map((e) => `<a href="#" data-accion="rastrear" data-etiqueta="${esc(e)}">${esc(e)}</a>`).join(", ")}</span>` : ""}</div>
+    return `<article class="pase ${t ? "" : "pase--reserva"}">
+      <div class="pase__cuerpo">
+        <div class="pase__marca">Data-Delta Airlines · ${t ? "Pase de abordar" : "Reserva"}</div>
+        <span class="sello sello--${clase}">${texto}</span>
+        <div class="ruta">
+          <div class="ruta__ciudad"><strong>${esc(v.origen.codigo)}</strong><span>${esc(v.origen.ciudad)}</span></div>
+          <span class="ruta__flecha" aria-hidden="true">✈</span>
+          <div class="ruta__ciudad"><strong>${esc(v.destino.codigo)}</strong><span>${esc(v.destino.ciudad)}</span></div>
+        </div>
+        <dl class="pase__datos">
+          <div><dt>Pasajero</dt><b>${esc(r.cliente.nombre)}</b></div>
+          <div><dt>Vuelo</dt><b>Vuelo ${esc(v.numero_vuelo)}</b></div>
+          <div><dt>Salida</dt><b>${esc(dia(v.salida_programada))} ${esc(hora(v.salida_programada))}</b></div>
+          <div><dt>Llegada</dt><b>${esc(hora(v.llegada_programada))}</b></div>
+          <div><dt>Puerta</dt><b>${esc(v.puerta || "—")}</b></div>
+          <div><dt>Millas</dt><b>${num(v.millas, 0)}</b></div>
+          <div><dt>Reserva</dt><b>#${r.id_reserva}</b></div>
+          ${t?.etiquetas.length ? `<div><dt>Maletas</dt><b>${t.etiquetas.map((e) => `<a href="#" data-accion="rastrear" data-etiqueta="${esc(e)}">${esc(e)}</a>`).join(" · ")}</b></div>` : ""}
+        </dl>
       </div>
-      <div class="precio"><span class="chip chip--${clase}">${texto}</span><strong>${usd(t ? t.valor : v.valor)}</strong><span>${t ? "pagado" : "a pagar"}</span></div>
-      <div class="acciones">
-        ${r.estado === "reservada" && !yaSalio ? `<button type="button" class="boton" data-accion="comprar" data-reserva="${r.id_reserva}">Comprar tiquete</button>` : ""}
-        ${r.estado === "comprado" && !yaSalio ? `<button type="button" class="boton boton--peligro" data-accion="cancelar" data-tiquete="${t.id_tiquete}">Cancelar tiquete</button>` : ""}
-      </div></div></article>`;
+      <div class="pase__talon">
+        <div class="pase__valor"><small>${t ? "Pagado" : "A pagar"}</small>${usd(t ? t.valor : v.valor)}</div>
+        ${t ? `<div class="codigo-barras" role="img" aria-label="Código de barras del tiquete ${t.id_tiquete}" style="background-position:${(t.id_tiquete * 7) % 13}px 0"></div>
+        <div class="mono ayuda">TIQUETE #${t.id_tiquete}</div>` : '<div class="ayuda">Aún sin tiquete</div>'}
+      </div>
+      ${(r.estado === "reservada" || r.estado === "comprado") && !yaSalio ? `<div class="pase__acciones">
+        ${r.estado === "reservada" ? `<button type="button" class="boton" data-accion="comprar" data-reserva="${r.id_reserva}">Comprar tiquete</button>` : ""}
+        ${r.estado === "comprado" ? `<button type="button" class="boton boton--peligro" data-accion="cancelar" data-tiquete="${t.id_tiquete}">Cancelar tiquete</button>` : ""}
+      </div>` : ""}
+    </article>`;
   };
   const proximos = reservas.filter((r) => aFecha(r.vuelo.salida_programada) > ahora);
   const anteriores = reservas.filter((r) => aFecha(r.vuelo.salida_programada) <= ahora).reverse();
-  const seccion = (titulo, lista) => lista.length ? `<h2>${titulo}</h2><div class="rejilla">${lista.map(tarjeta).join("")}</div>` : "";
+  const seccion = (titulo, lista) => lista.length ? `<h2>${titulo}</h2><div class="rejilla">${lista.map(pase).join("")}</div>` : "";
   $("#principal").innerHTML = `<h1>Mis reservas y tiquetes</h1>
+    ${agente ? '<p class="ayuda">Reservas que usted gestiona, a nombre de sus clientes.</p>' : ""}
     ${seccion("Próximos viajes", proximos)}${seccion("Viajes anteriores", anteriores)}
     ${reservas.length ? "" : '<div class="tarjeta vacio">Todavía no tiene reservas. Busque un vuelo y reserve el primero.</div>'}`;
 }
+
+/* ---------- recorrido B: aeropuerto ---------- */
 
 async function vistaAeropuerto(idVuelo = estado.vueloAeropuerto) {
   const consulta = idVuelo ? `?vuelo=${idVuelo}` : "";
@@ -249,7 +349,7 @@ async function vistaAeropuerto(idVuelo = estado.vueloAeropuerto) {
     const ult = m.escaneos[m.escaneos.length - 1];
     const aqui = ult && ult.id_aeropuerto === yo;
     return `<div class="maleta"><code>${esc(m.etiqueta)}</code><span>${m.peso_kg} kg</span>
-      <span class="ayuda">${m.escaneos.map((s) => esc(s.codigo)).join(" → ")}</span>
+      <span class="ayuda mono">${m.escaneos.map((s) => esc(s.codigo)).join(" → ")}</span>
       <button type="button" class="boton boton--sec boton--chico" data-accion="escanear" data-equipaje="${m.id_equipaje}" ${aqui ? 'disabled title="Ya se leyó aquí por última vez"' : ""}>Escanear aquí</button></div>`;
   };
   const pasajero = (r, sale) => {
@@ -275,7 +375,7 @@ async function vistaAeropuerto(idVuelo = estado.vueloAeropuerto) {
     <p class="ayuda">El abordaje y la recepción de maletas se hacen en el aeropuerto de origen del vuelo; la lectura de una maleta, en el origen o en el destino.</p>
     ${vuelos.length ? `<div class="filtros"><label class="campo">Vuelo<select id="selector-vuelo">${vuelos.map(opcion).join("")}</select></label></div>
       <section class="tarjeta grupo"><div class="grupo__titulo"><h2>${sale ? "Sale de aquí" : "Llega aquí"} · ${esc(actual.numero_vuelo)}</h2>
-        <span class="ayuda">${esc(actual.o_ciudad)} → ${esc(actual.d_ciudad)}</span></div>
+        <span class="ayuda mono">${esc(actual.o_ciudad)} → ${esc(actual.d_ciudad)}</span></div>
         ${tiquetes.map((r) => pasajero(r, sale)).join("")}</section>`
       : '<div class="tarjeta vacio">No hay tiquetes para vuelos de este aeropuerto. Compre uno como cliente para un vuelo que salga de aquí.</div>'}`;
 }
@@ -291,14 +391,81 @@ function vistaRastreo(etiqueta = "") {
 
 async function rastrear(etiqueta) {
   const { maleta: m } = await api("GET", `/api/equipaje?etiqueta=${encodeURIComponent(etiqueta)}`);
-  $("#rastro").innerHTML = `<article class="tarjeta"><h2>${esc(m.etiqueta)} <span class="chip chip--info">${esc(m.estado)}</span></h2>
-    <div class="meta"><span>Pasajero: ${esc(m.pasajero)}</span><span>Vuelo ${esc(m.vuelo)}</span>
-      <span>${esc(m.origen)} → ${esc(m.destino)}</span><span>${m.peso_kg} kg</span></div>
+  $("#rastro").innerHTML = `<article class="tarjeta"><span class="etiqueta-maleta">${esc(m.etiqueta)}</span>
+    <h2 style="margin-top:.6rem"><span class="chip chip--info">${esc(m.estado)}</span></h2>
+    <div class="ayuda mono">Pasajero: ${esc(m.pasajero)} · Vuelo ${esc(m.vuelo)} · ${esc(m.origen)} → ${esc(m.destino)} · ${m.peso_kg} kg</div>
     <ol class="linea-tiempo">${m.escaneos.map((s) => `<li><strong>${esc(s.ciudad)} (${esc(s.codigo)})</strong>
       <small>${esc(dia(s.fecha_hora))} · ${esc(hora(s.fecha_hora))}</small></li>`).join("")}</ol></article>`;
 }
 
-const VISTAS = { inicio: vistaInicio, vuelos: vistaVuelos, reservas: vistaReservas, aeropuerto: vistaAeropuerto, rastreo: () => vistaRastreo() };
+/* ---------- recorrido C: analítica (Data Warehouse) ---------- */
+
+const REPORTES = {
+  ingresos: { req: "4a", titulo: "Ingresos por venta de tiquetes", fila: "Ciudad", unidad: (v) => usd(v), celda: (v) => num(v),
+    nota: "Un registro por tiquete no cancelado; el mes es el de la compra y la ciudad la de origen del vuelo." },
+  reservaciones: { req: "4b", titulo: "Reservaciones", fila: "Ciudad", unidad: (v) => num(v), celda: (v) => num(v),
+    nota: "Un registro por reserva, haya llegado o no a tiquete; el mes es el de la reserva y la ciudad la de origen del vuelo." },
+  millas: { req: "4c", titulo: "Millas acumuladas en vuelos nacionales", fila: "Pasajero", unidad: (v) => `${num(v, 1)} mi`, celda: (v) => num(v),
+    nota: "Un registro por abordaje; las millas son la distancia del trayecto y solo cuentan los vuelos cuyo origen y destino están en el mismo país." },
+};
+
+function tablaCalor(rep, def) {
+  const max = Math.max(1, ...rep.filas.flatMap((f) => f.valores));
+  const celda = (v) => {
+    if (!v) return '<td class="celda" style="color:var(--suave)">·</td>';
+    const alfa = 0.12 + 0.85 * (v / max);
+    return `<td class="celda" style="background:rgba(255,184,28,${alfa.toFixed(2)});${alfa > 0.5 ? "color:#0b2540" : ""}">${def.celda(v)}</td>`;
+  };
+  return `<div class="mapa-calor"><table><thead><tr><th>${def.fila}</th>${rep.meses.map((m) => `<th>${m}</th>`).join("")}<th>Total</th></tr></thead>
+    <tbody>${rep.filas.map((f) => `<tr><td>${esc(f.etiqueta)}<small>${esc(f.detalle)}</small></td>${f.valores.map(celda).join("")}<td class="total">${def.celda(f.total)}</td></tr>`).join("")}</tbody>
+    <tfoot><tr><td>Total</td>${rep.totales_mes.map((v) => `<td>${v ? def.celda(v) : "·"}</td>`).join("")}<td class="total">${def.celda(rep.total)}</td></tr></tfoot></table></div>`;
+}
+
+function graficoMeses(rep) {
+  const max = Math.max(1, ...rep.totales_mes), alto = 120;
+  const barras = rep.totales_mes.map((v, i) => {
+    const h = (v / max) * alto, x = 14 + i * 47;
+    return `<rect class="barra-m ${v === max && v > 0 ? "barra-m--max" : ""}" x="${x}" y="${alto - h + 12}" width="34" height="${Math.max(h, 1)}"><title>${rep.meses[i]}: ${v}</title></rect>
+      <text x="${x + 17}" y="${alto + 28}" text-anchor="middle">${rep.meses[i]}</text>${v ? `<text x="${x + 17}" y="${alto - h + 8}" text-anchor="middle">${num(v)}</text>` : ""}`;
+  });
+  return `<div class="barras"><svg viewBox="0 0 580 ${alto + 36}" role="img" aria-label="Total por mes">${barras.join("")}</svg></div>`;
+}
+
+async function vistaAnalitica() {
+  const dw = await api("GET", "/api/dw");
+  const e = estado.info.esquema, filas = dw.filas;
+  const nombres = Object.keys(filas);
+  const caja = `<div class="tarjeta flujo__caja"><h2>Data Warehouse <small>${e.dw.tablas} tablas · ${e.dw.llaves_foraneas} FK</small></h2>
+    <table class="tabla-dw">${nombres.map((n) => `<tr class="${n.startsWith("facts") ? "hecho" : ""}"><td>${n}</td><td>${num(filas[n])}</td></tr>`).join("")}</table></div>`;
+  const flecha = `<div class="flujo__flecha"><svg viewBox="0 0 160 26" aria-hidden="true"><path d="M2 13 H148 M138 4 L152 13 L138 22" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>
+    <button type="button" class="boton" data-accion="cargar-dw">${dw.cargado ? "Recargar el DW" : "Cargar el DW"}</button>
+    <span class="ayuda">Extracción, transformación y carga desde la base</span></div>`;
+  const base = `<div class="tarjeta flujo__caja"><h2>Base transaccional <small>${e.tablas} tablas · ${e.llaves_foraneas} FK</small></h2>
+    <p class="ayuda">Aquí se vende, se aborda y se escanean las maletas. El DW solo recibe lo que la base ya tiene.</p>
+    <table class="tabla-dw"><tr><td>reserva</td><td>→ facts_reservaciones</td></tr><tr><td>tiquete</td><td>→ facts_ingresos</td></tr>
+    <tr><td>abordaje, vuelo</td><td>→ facts_millas</td></tr><tr><td>ciudad, cliente, vuelo</td><td>→ dimensiones</td></tr></table></div>`;
+  let cuerpo = '<p class="ayuda">El Data Warehouse está vacío. Cárguelo para ver los reportes de ingresos, reservaciones y millas.</p>';
+  if (dw.cargado) {
+    const rep = await api("GET", `/api/dw/${estado.reporte}${estado.anioDw ? `?anio=${estado.anioDw}` : ""}`);
+    estado.anioDw = rep.anio;
+    const def = REPORTES[estado.reporte];
+    const v = rep.verificacion;
+    cuerpo = `<div class="segmentos" role="group" aria-label="Reporte">${Object.entries(REPORTES).map(([id, d]) =>
+        `<button type="button" data-accion="reporte" data-reporte="${id}" aria-pressed="${id === estado.reporte}">${d.req} ${d.titulo.split(" ")[0]}</button>`).join("")}</div>
+      <div class="tarjeta"><div class="reporte__cabecera"><div><h2>${def.req} · ${def.titulo}</h2><p class="ayuda">${def.nota}</p></div>
+        <label class="campo">Año<select id="anio-dw">${rep.anios.map((a) => `<option ${a === rep.anio ? "selected" : ""}>${a}</option>`).join("")}</select></label></div>
+        <p class="cuadre ${v.coinciden ? "cuadre--ok" : "cuadre--mal"}">${v.coinciden ? "✓" : "✗"} Total del DW ${def.unidad(v.dw)} · calculado directo en la base ${def.unidad(v.base)}
+          ${v.coinciden ? "· coinciden" : "· NO coinciden"}</p>
+        ${tablaCalor(rep, def)}${graficoMeses(rep)}
+        ${estado.reporte === "millas" ? `<p class="ayuda">Quedaron fuera ${num(rep.millas_internacionales_excluidas, 1)} millas de vuelos internacionales.</p>` : ""}
+        <details class="consulta"><summary>Consulta ejecutada sobre el DW</summary><pre>${esc(rep.consulta)}</pre></details></div>`;
+  }
+  $("#principal").innerHTML = `<h1>Analítica · Data Warehouse</h1>
+    <div class="flujo">${base}${flecha}${caja}</div>${cuerpo}`;
+}
+
+const VISTAS = { inicio: vistaInicio, vuelos: vistaVuelos, reservas: vistaReservas, aeropuerto: vistaAeropuerto,
+  rastreo: () => vistaRastreo(), analitica: vistaAnalitica };
 
 /* ---------- eventos ---------- */
 
@@ -316,6 +483,9 @@ document.addEventListener("click", (e) => {
         const id = $(`[data-entrada="${d.tipo}"]`).value;
         return entrar(`${d.tipo}:${id}`);
       }
+      case "mapa-aeropuerto":
+        estado.filtros.origen = String(estado.filtros.origen) === d.id ? "" : d.id;
+        return ir("vuelos");
       case "detalle": return alternarDetalle(d.vuelo, boton);
       case "reservar": {
         const cuerpo = { id_vuelo: Number(d.vuelo) };
@@ -340,6 +510,8 @@ document.addEventListener("click", (e) => {
       }
       case "escanear": aviso((await api("POST", `/api/equipaje/${d.equipaje}/escaneos`)).mensaje); return vistaAeropuerto();
       case "rastrear": estado.vista = "rastreo"; dibujarNav(); return vistaRastreo(d.etiqueta);
+      case "cargar-dw": aviso((await api("POST", "/api/dw/cargar")).mensaje); return vistaAnalitica();
+      case "reporte": estado.reporte = d.reporte; return vistaAnalitica();
     }
   });
 });
@@ -360,6 +532,7 @@ document.addEventListener("change", (e) => {
   if (e.target.id === "selector-actor" && e.target.value) hacer(() => entrar(e.target.value));
   if (e.target.id === "cliente-agente") estado.clienteDelAgente = e.target.value;
   if (e.target.id === "selector-vuelo") hacer(() => vistaAeropuerto(Number(e.target.value)));
+  if (e.target.id === "anio-dw") { estado.anioDw = e.target.value; hacer(vistaAnalitica); }
 });
 
 /* ---------- inicio ---------- */
@@ -369,7 +542,7 @@ async function iniciar() {
     estado.usuarios = await api("GET", "/api/demo/usuarios");
     estado.info = await api("GET", "/api/info");
     const e = estado.info.esquema;
-    $("#pie-bd").textContent = `Base de datos verificada contra el script de Enterprise Architect: ${e.tablas} tablas · ${e.llaves_foraneas} llaves foráneas · ${e.unicos} restricciones únicas · modo ${estado.info.modo}.`;
+    $("#pie-bd").textContent = `Base verificada contra el script de Enterprise Architect: ${e.tablas} tablas · ${e.llaves_foraneas} llaves foráneas · ${e.unicos} únicas. Data Warehouse: ${e.dw.tablas} tablas · ${e.dw.llaves_foraneas} llaves foráneas. Modo ${estado.info.modo}.`;
     const guardado = (() => { try { return JSON.parse(sessionStorage.getItem("data-delta:actor")); } catch { return null; } })();
     if (guardado) {
       try { estado.actor = (await api("POST", "/api/sesion", guardado)).actor; } catch { estado.actor = null; }

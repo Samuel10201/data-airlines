@@ -4,6 +4,7 @@ Reemplaza a http.server sin tocar la lógica: la BD SQLite vive en memoria, la s
 portal (memoria de la pestaña, sin cookie) y cada petición /api/... que intercepta el JavaScript pasa por
 el MISMO despachador y la MISMA tabla de rutas de aerolinea/rutas.py. Tras cada petición que escribe,
 la BD se serializa (sqlite3 serialize) en base64 para que el JavaScript la guarde en localStorage.
+El Data Warehouse es una segunda base en memoria (esquema `dw`) que no se guarda: se vuelve a cargar con un botón.
 """
 import base64
 import json
@@ -17,16 +18,15 @@ VUELOS_FUTUROS_MINIMOS = 6  # con menos, la BD guardada "caducó" y se vuelve a 
 
 
 class PortalNavegador:
-    """Una BD en memoria + la sesión del usuario de esta pestaña."""
+    """Una BD en memoria (con su DW adjunto) + la sesión del usuario de esta pestaña."""
 
-    def __init__(self, script_sql, bd_guardada=None):
-        """Restaura la BD guardada (base64) o la crea desde el script T-SQL y la siembra."""
+    def __init__(self, script_sql, script_dw, bd_guardada=None):
+        """Restaura la BD guardada (base64) o la crea desde el script T-SQL y la siembra; crea el DW vacío."""
         self.rutas = construir_rutas()
         self.actor = None
-        self.script = script_sql
         self.restaurada = False
         self.aviso = None
-        self.conexion = conectar(":memory:")
+        self.conexion = conectar(":memory:", ":memory:")
         if bd_guardada:
             try:
                 self._restaurar(bd_guardada)
@@ -35,13 +35,14 @@ class PortalNavegador:
                 self.aviso = f"No se pudo restaurar la BD guardada ({e}); se regeneró desde el script."
                 print(self.aviso)
                 self.conexion.close()
-                self.conexion = conectar(":memory:")
+                self.conexion = conectar(":memory:", ":memory:")
         if not self.restaurada:
             self.resumen = crear_esquema(self.conexion, script_sql)
             self.resumen["semilla"] = semilla.sembrar(self.conexion)
         else:
             self.resumen = verificar(self.conexion)
         self.resumen["script"] = "modelo-relacional-sqlserver.sql"
+        self.resumen["dw"] = crear_esquema(self.conexion, script_dw, "dw")
 
     def _restaurar(self, bd_base64):
         self.conexion.deserialize(base64.b64decode(bd_base64))
@@ -56,22 +57,22 @@ class PortalNavegador:
 
     def atender(self, metodo, url, cuerpo):
         """Atiende una petición /api/... y devuelve JSON: {estado, respuesta, bd?}.
-        `bd` (base64) solo viene cuando la petición cambió datos, para guardarla."""
+        `bd` (base64) solo viene cuando la petición cambió datos de la base transaccional, para guardarla."""
         cambios_antes = self.conexion.total_changes
         estado, respuesta, ctx = despachar(self.rutas, metodo.upper(), url, cuerpo or "", self.conexion,
                                            self.actor, self.resumen, "navegador")
         if ctx and ctx.cambio_sesion:
             self.actor = ctx.cambio_sesion[1]
         salida = {"estado": estado, "respuesta": respuesta}
-        if self.conexion.total_changes != cambios_antes:
+        if self.conexion.total_changes != cambios_antes and not url.startswith("/api/dw"):  # el DW no se guarda
             salida["bd"] = self.serializar()
         return json.dumps(salida, ensure_ascii=False, default=str)
 
     def serializar(self):
-        """La BD completa en base64 (sqlite3.Connection.serialize, Python 3.11+)."""
+        """La BD transaccional completa en base64 (sqlite3.Connection.serialize, Python 3.11+)."""
         return base64.b64encode(self.conexion.serialize()).decode("ascii")
 
 
-def crear_portal(script_sql, bd_guardada=None):
+def crear_portal(script_sql, script_dw, bd_guardada=None):
     """Punto de entrada que llama el JavaScript de arranque."""
-    return PortalNavegador(script_sql, bd_guardada or None)
+    return PortalNavegador(script_sql, script_dw, bd_guardada or None)

@@ -3,7 +3,8 @@
 Prototipo del **punto 5 del Parcial 2** de Diseño de Software I (Universidad del Norte): una aplicación web
 de una aerolínea ficticia que recorre la interfaz, la lógica y la persistencia sobre el **modelo relacional
 del punto 3**. Todo corre sobre exactamente las 26 tablas del script que generó Enterprise Architect
-(`sql/modelo-relacional-sqlserver.sql`), sin añadir ni cambiar ninguna.
+(`sql/modelo-relacional-sqlserver.sql`), sin añadir ni cambiar ninguna. Un tercer recorrido carga el **Data Warehouse**
+(7 tablas, `sql/modelo-dw-sqlserver.sql`, también generado por EA) desde esa base y responde los requerimientos 4a, 4b y 4c.
 
 **Demo en línea:** https://samuel10201.github.io/data-airlines/
 
@@ -28,17 +29,24 @@ viaje o un aeropuerto de la lista (esto es una demostración de roles, no seguri
 2. En el aeropuerto de destino: escanear la maleta, solo si el pasajero abordó.
 3. Cualquiera puede rastrear una maleta por su etiqueta y ver dónde está.
 
+**Recorrido C — Analítica (Data Warehouse)** (todos)
+1. Cargar el DW: una extracción, transformación y carga vacía las 7 tablas del DW y las vuelve a llenar desde la base en una sola
+   transacción. Se puede repetir; da siempre las mismas filas.
+2. Ver 4a (ingresos por ciudad y mes), 4b (reservaciones por ciudad y mes) y 4c (millas de vuelos nacionales por pasajero y mes),
+   con la tabla de calor, el total por mes y la consulta que se ejecutó sobre el DW.
+3. Cada reporte compara su total con el que se obtiene directamente de la base transaccional; deben coincidir.
+
 ## Qué tablas ejercita cada recorrido
 
 | Recorrido | Escribe | Lee |
 |---|---|---|
 | A | `reserva`, `tiquete` | `cliente`, `agente_viaje`, `empleado`, `vuelo`, `aeropuerto`, `ciudad`, `avion`, `vuelo_piloto`, `vuelo_tcp`, `piloto`, `tcp`, `abordaje` |
 | B | `abordaje`, `equipaje`, `escaneo` | `tiquete`, `reserva`, `cliente`, `vuelo`, `aeropuerto`, `ciudad` |
+| C | las 7 tablas del DW (`dim_tiempo`, `dim_geografia`, `dim_cliente`, `dim_ruta`, `facts_ingresos`, `facts_reservaciones`, `facts_millas`) | `reserva`, `tiquete`, `abordaje`, `vuelo`, `aeropuerto`, `ciudad`, `cliente` |
 | Solo semilla | `recurso`, `consumible`, `equipo`, `vuelo_recurso`, `equipo_avion`, `mantenimiento_avion`, `mantenimiento_equipo`, `mantenimiento_avion_tecnico`, `mantenimiento_equipo_tecnico`, `tecnico_mantenimiento` | — |
 
-**Lo que el prototipo NO cubre:** el panel de operaciones (asignar tripulación, recursos y avión a un vuelo),
-el registro de mantenimientos y los reportes del Data Warehouse. Esas tablas existen y tienen datos de
-demostración, pero ningún recorrido las modifica.
+**Lo que el prototipo NO cubre:** el panel de operaciones (asignar tripulación, recursos y avión a un vuelo) y el
+registro de mantenimientos. Esas tablas existen y tienen datos de demostración, pero ningún recorrido las modifica.
 
 ## Cómo correrlo
 
@@ -49,7 +57,7 @@ python app.py                  # servidor local: http://127.0.0.1:8765
 python app.py --reiniciar      # borra datos\ y regenera la BD desde el script
 python -m http.server 8000     # como en GitHub Pages (estático, Python en el navegador; necesita internet)
 python pruebas/prueba_esquema.py     # traductor del script y catálogo: 26 tablas, 34 FK, 6 únicos
-python pruebas/prueba_recorrido.py   # los dos recorridos por HTTP, con 70 comprobaciones y los rechazos
+python pruebas/prueba_recorrido.py   # los tres recorridos por HTTP (98 comprobaciones), los rechazos y el cuadre del DW con la base
 ```
 
 La página detecta sola el modo: si el servidor local lo marca al entregar `index.html`, usa la API HTTP; si no,
@@ -61,13 +69,15 @@ arranca Pyodide.
 index.html, estilos.css, app.js     SPA: interfaz por rol; todo pasa por la API JSON /api/...
 arranque.js                         decide el modo; en modo estático carga Pyodide e intercepta /api/...
 app.py                              punto de entrada del modo servidor local
-sql/modelo-relacional-sqlserver.sql el script de EA, intacto (fuente única del esquema)
+sql/modelo-relacional-sqlserver.sql el script de EA de la base, intacto (fuente única del esquema transaccional)
+sql/modelo-dw-sqlserver.sql         el script de EA del Data Warehouse (7 tablas), intacto
 aerolinea/
     dominios.py    dominios y parámetros que el script no impone; errores de negocio
     esquema.py     traductor T-SQL (EA) -> SQLite, creación de la BD y verificación contra el catálogo
     geografia.py   millas (haversine) y tarifa: se derivan de las coordenadas, no se guardan
     semilla.py     datos de demostración, creados con las mismas funciones que usa la interfaz
     sesion.py      "entrar como"; vuelos.py, ventas.py, aeropuerto.py: la lógica de cada recorrido
+    dw.py          el DW (esquema `dw`): carga desde la base, reportes 4a, 4b y 4c y su verificación contra la base
     rutas.py       tabla de rutas /api/... y despachador (sin transporte)
     servidor.py    adaptador HTTP (http.server)      navegador.py    adaptador del navegador (Pyodide)
 pruebas/           prueba_esquema.py y prueba_recorrido.py
@@ -125,6 +135,10 @@ script declaraba: **26 tablas, 34 llaves foráneas, 6 restricciones únicas, 22 
   El botón *Reiniciar datos de demostración* vuelve a la semilla.
 - **SQLite en lugar de SQL Server:** el script se genera para SQL Server 2012 y se ejecuta traducido a SQLite;
   la lógica no depende del motor. Las llaves foráneas están activas (`PRAGMA foreign_keys = ON`).
+- **El DW no se guarda en el navegador:** vive en una segunda base en memoria (esquema `dw`); tras recargar la página hay que
+  volver a pulsar *Cargar el DW*. En modo servidor es un archivo (`datos/aerolinea-dw.db`).
+- **DW de demostración en SQLite:** el script del DW se genera para SQL Server 2012 y se traduce igual que el de la base; no se
+  desplegó en Snowflake.
 - **Pagos simulados:** el modelo no tiene entidad de pago; el valor se guarda en `tiquete` y no hay pasarela.
 - **Una salida por vuelo:** cada fila de `vuelo` es una salida concreta con su avión; la semilla se genera con
   fechas relativas al momento en que se abre la demo por primera vez.

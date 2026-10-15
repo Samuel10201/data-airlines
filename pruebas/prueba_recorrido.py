@@ -18,7 +18,7 @@ sys.path.insert(0, str(AQUI))
 sys.stdout.reconfigure(encoding="utf-8")
 
 from aerolinea.servidor import crear_servidor  # noqa: E402
-from app import SCRIPT_LOCAL, preparar_bd  # noqa: E402
+from app import SCRIPT_LOCAL, preparar_bd, ruta_dw_de  # noqa: E402
 
 fallos = []
 total = [0]
@@ -66,7 +66,7 @@ def main():
     carpeta = tempfile.mkdtemp(prefix="delta-prueba-")
     ruta_bd = Path(carpeta) / "prueba.db"
     resumen = preparar_bd(ruta_bd, SCRIPT_LOCAL)
-    servidor = crear_servidor("127.0.0.1", 0, ruta_bd, AQUI, resumen, silencioso=True)
+    servidor = crear_servidor("127.0.0.1", 0, ruta_bd, ruta_dw_de(ruta_bd), AQUI, resumen, silencioso=True)
     threading.Thread(target=servidor.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{servidor.server_address[1]}"
     publico = Sesion(base)
@@ -185,6 +185,54 @@ def main():
     t3 = esperar(ana, "POST", f"/api/reservas/{cancelado['id_reserva']}/tiquete", None, 200, "compra del tercer tiquete")["reserva"]["tiquete"]["id_tiquete"]
     esperar(ana, "POST", f"/api/tiquetes/{t3}/cancelar", None, 200, "se cancela el tercer tiquete")
     esperar(Sesion(base).entrar("aeropuerto", vuelos[3]["origen"]["id_aeropuerto"]), "POST", f"/api/tiquetes/{t3}/abordaje", None, 400, "un tiquete cancelado no aborda", "cancelado")
+
+    print("\nRecorrido C: Data Warehouse")
+    comprobar((info["esquema"]["dw"]["tablas"], info["esquema"]["dw"]["llaves_foraneas"]) == (7, 9),
+              "el DW tiene 7 tablas y 9 FK verificadas contra su script")
+    estado_dw = esperar(publico, "GET", "/api/dw", None, 200, "estado del DW")
+    comprobar(not estado_dw["cargado"] and sum(estado_dw["filas"].values()) == 0, "al arrancar el DW está vacío")
+    esperar(publico, "GET", "/api/dw/ingresos", None, 400, "un reporte con el DW vacío pide cargarlo", "vacío")
+    fila = esperar(publico, "POST", "/api/dw/cargar", None, 200, "se carga el DW desde la base")["filas"]
+    bd_dw = sqlite3.connect(ruta_bd)
+    n_tiquetes = bd_dw.execute("SELECT COUNT(*) FROM tiquete WHERE cancelado = 0").fetchone()[0]
+    n_reservas = bd_dw.execute("SELECT COUNT(*) FROM reserva").fetchone()[0]
+    n_abordajes = bd_dw.execute("SELECT COUNT(*) FROM abordaje").fetchone()[0]
+    n_clientes = bd_dw.execute("SELECT COUNT(*) FROM cliente").fetchone()[0]
+    n_ciudades = bd_dw.execute("SELECT COUNT(*) FROM ciudad").fetchone()[0]
+    total_bd = bd_dw.execute("SELECT ROUND(SUM(valor), 2) FROM tiquete WHERE cancelado = 0 "
+                             "AND substr(fecha_compra, 1, 4) = '2026'").fetchone()[0]
+    bd_dw.close()
+    comprobar(fila["facts_ingresos"] == n_tiquetes, f"facts_ingresos: un registro por tiquete no cancelado ({fila['facts_ingresos']} = {n_tiquetes})")
+    comprobar(fila["facts_reservaciones"] == n_reservas, f"facts_reservaciones: un registro por reserva ({fila['facts_reservaciones']} = {n_reservas})")
+    comprobar(fila["facts_millas"] == n_abordajes, f"facts_millas: un registro por abordaje ({fila['facts_millas']} = {n_abordajes})")
+    comprobar(fila["dim_cliente"] == n_clientes and fila["dim_geografia"] == n_ciudades, "las dimensiones de cliente y geografía copian la base")
+    comprobar(fila["dim_tiempo"] % 12 == 0 and fila["dim_ruta"] > 0, "dim_tiempo trae años completos y dim_ruta tiene rutas")
+    ing = esperar(publico, "GET", "/api/dw/ingresos", None, 200, "4a: ingresos por ciudad y mes")
+    comprobar(len(ing["meses"]) == 12 and len(ing["filas"]) == n_ciudades and all(len(f["valores"]) == 12 for f in ing["filas"]),
+              "4a trae una fila por ciudad y 12 meses")
+    comprobar(ing["verificacion"]["coinciden"] and abs(ing["total"] - total_bd) < 0.01, f"4a cuadra con la base ({ing['total']} = {total_bd})")
+    res = esperar(publico, "GET", "/api/dw/reservaciones", None, 200, "4b: reservaciones por ciudad y mes")
+    comprobar(res["verificacion"]["coinciden"] and res["total"] == n_reservas, f"4b cuadra con la base ({res['total']} = {n_reservas})")
+    mil = esperar(publico, "GET", "/api/dw/millas", None, 200, "4c: millas nacionales por pasajero y mes")
+    comprobar(mil["verificacion"]["coinciden"] and mil["total"] > 0, f"4c cuadra con la base ({mil['total']} millas nacionales)")
+    comprobar(mil["millas_internacionales_excluidas"] > 0 and "r.nacional = 1" in mil["consulta"],
+              "4c deja fuera las millas internacionales y muestra su consulta")
+    esperar(publico, "GET", "/api/dw/ingresos?anio=1999", None, 400, "un año sin datos se rechaza")
+    esperar(publico, "GET", "/api/dw/ingresos?anio=abc", None, 400, "un año que no es número se rechaza")
+    comprobar(esperar(publico, "POST", "/api/dw/cargar", None, 200, "la carga se puede repetir")["filas"] == fila,
+              "cargar dos veces da exactamente las mismas filas (idempotente)")
+    bd_dw = sqlite3.connect(ruta_bd)
+    otro_vuelo = bd_dw.execute(
+        "SELECT v.id_vuelo FROM vuelo v WHERE v.salida_programada > datetime('now','localtime') AND v.id_vuelo NOT IN "
+        "(SELECT id_vuelo FROM reserva WHERE id_cliente = ?) AND v.id_vuelo <> ? ORDER BY v.salida_programada LIMIT 1",
+        (clientes[0]["id_cliente"], primero["id_vuelo"])).fetchone()[0]  # el primero se dejó lleno a propósito
+    bd_dw.close()
+    nueva = esperar(ana, "POST", "/api/reservas", {"id_vuelo": otro_vuelo}, 200, "se reserva otro vuelo")["reserva"]
+    compra3 = esperar(ana, "POST", f"/api/reservas/{nueva['id_reserva']}/tiquete", None, 200, "y se compra su tiquete")["reserva"]["tiquete"]["valor"]
+    esperar(publico, "POST", "/api/dw/cargar", None, 200, "se recarga el DW tras la venta")
+    ing2 = esperar(publico, "GET", "/api/dw/ingresos", None, 200, "4a después de la venta")
+    comprobar(abs(ing2["total"] - (ing["total"] + compra3)) < 0.01, f"el ingreso nuevo ({compra3}) aparece en el DW tras recargar")
+    comprobar(publico.pedir("GET", "/api/info")[1]["esquema"]["tablas"] == 26, "la base transaccional sigue con sus 26 tablas")
 
     print("\nCierre de sesión")
     esperar(ana, "DELETE", "/api/sesion", None, 200, "se cierra la sesión")

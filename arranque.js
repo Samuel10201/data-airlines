@@ -11,8 +11,9 @@
 const PYODIDE_VERSION = "0.29.5";
 const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 const MODULOS = ["__init__", "dominios", "esquema", "geografia", "semilla", "sesion", "vuelos", "ventas",
-  "aeropuerto", "rutas", "navegador"];
+  "aeropuerto", "dw", "rutas", "navegador"];
 const SCRIPT_SQL = "sql/modelo-relacional-sqlserver.sql";
+const SCRIPT_DW = "sql/modelo-dw-sqlserver.sql";
 const CLAVE_BD = "data-delta:bd-v1";
 
 const portalWeb = { modo: null, portal: null, guardadoFallido: false };
@@ -72,9 +73,10 @@ async function arrancarPyodide() {
   const pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
 
   pasoCarga("Cargando SQLite y el código del prototipo…");
-  const [fuentes, script] = await Promise.all([
+  const [fuentes, script, scriptDw] = await Promise.all([
     Promise.all(MODULOS.map((m) => textoDe(`aerolinea/${m}.py`))),
     textoDe(SCRIPT_SQL),
+    textoDe(SCRIPT_DW),
   ]);
   pyodide.FS.mkdirTree("/home/pyodide/aerolinea");
   MODULOS.forEach((m, i) => pyodide.FS.writeFile(`/home/pyodide/aerolinea/${m}.py`, fuentes[i]));
@@ -86,7 +88,7 @@ async function arrancarPyodide() {
   await respirar();
   const crearPortal = pyodide.runPython(
     "import sys\nsys.path.insert(0, '/home/pyodide')\nfrom aerolinea.navegador import crear_portal\ncrear_portal");
-  const portal = crearPortal(script, guardada);
+  const portal = crearPortal(script, scriptDw, guardada);
   if (!portal.restaurada) guardarBd(portal.serializar());
   portalWeb.portal = portal;
   console.info(`Pyodide ${pyodide.version} listo en ${Math.round(performance.now() - t0)} ms`,

@@ -67,7 +67,7 @@ class Manejador(BaseHTTPRequestHandler):
         sesiones = self.server.sesiones
         token = self.token_sesion()
         actor = sesiones.obtener(token) if token else None
-        bd = conectar(self.server.ruta_bd)
+        bd = conectar(self.server.ruta_bd, self.server.ruta_dw)
         try:
             estado, respuesta, ctx = despachar(self.server.rutas, metodo, self.path, crudo, bd, actor,
                                                self.server.resumen_esquema, "servidor")
@@ -97,12 +97,13 @@ class Manejador(BaseHTTPRequestHandler):
         self._api("DELETE")
 
 
-def crear_servidor(host, puerto, ruta_bd, carpeta_web, resumen_esquema, silencioso=False):
+def crear_servidor(host, puerto, ruta_bd, ruta_dw, carpeta_web, resumen_esquema, silencioso=False):
     """Crea el servidor HTTP con sus rutas, sesiones y configuración."""
     servidor = ThreadingHTTPServer((host, puerto), Manejador)
     servidor.rutas = construir_rutas()
     servidor.sesiones = Sesiones()
     servidor.ruta_bd = ruta_bd
+    servidor.ruta_dw = ruta_dw
     servidor.carpeta_web = Path(carpeta_web).resolve()
     servidor.resumen_esquema = resumen_esquema
     servidor.silencioso = silencioso
