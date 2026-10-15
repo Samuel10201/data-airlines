@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Prototipo de Data-Delta Airlines: reservar y comprar vuelos, abordaje y seguimiento de maletas sobre el modelo relacional del Parcial 2 de Diseño de Software I.">
+  <title>Data-Delta Airlines · Prototipo</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f4c5c'/%3E%3Cpath d='M6 22 26 9l-5 15-4-6z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+  <div id="franja-demo" class="franja" hidden>
+    <span><strong>Demostración estática.</strong> El código Python del prototipo corre en su navegador (Pyodide) y los datos se guardan solo en este navegador. <span id="franja-aviso"></span></span>
+    <button type="button" id="reiniciar-datos" class="boton boton--sec boton--chico">Reiniciar datos de demostración</button>
+  </div>
+  <header class="barra">
+    <div class="barra__interior">
+      <a class="marca" href="./" aria-label="Data-Delta Airlines, inicio">
+        <svg class="marca__icono" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M6 22 26 9l-5 15-4-6z"/></svg>
+        <span><strong>Data-Delta</strong> Airlines<small>Prototipo · Diseño de Software I</small></span>
+      </a>
+      <nav id="navegacion" class="nav" aria-label="Secciones"></nav>
+      <div id="sesion" class="sesion"></div>
+    </div>
+  </header>
+  <main id="principal" class="principal" tabindex="-1"></main>
+  <footer class="pie">
+    <p id="pie-bd"></p>
+    <p>Aerolínea ficticia. Prototipo académico del Parcial 2 (Universidad del Norte): no hay pagos reales ni autenticación, porque el modelo relacional no tiene credenciales.</p>
+  </footer>
+  <div id="avisos" class="avisos" role="status" aria-live="polite"></div>
+
+  <div id="carga" class="carga" role="status" aria-live="polite">
+    <div class="carga__caja">
+      <svg class="marca__icono marca__icono--grande" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8"/><path d="M6 22 26 9l-5 15-4-6z"/></svg>
+      <h1 id="carga-titulo">Preparando el prototipo…</h1>
+      <div class="carga__barra" aria-hidden="true"><i></i></div>
+      <p id="carga-paso">Iniciando…</p>
+      <p class="ayuda">Esta versión no usa servidor: descarga Python (Pyodide, unos 8 MB la primera vez; luego queda en caché) y ejecuta el mismo código del prototipo en su navegador. Tarda unos segundos.</p>
+      <noscript><p><strong>El prototipo necesita JavaScript activado.</strong></p></noscript>
+    </div>
+  </div>
+  <!--MODO_SERVIDOR-->
+  <script src="arranque.js"></script>
+</body>
+</html>

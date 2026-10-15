@@ -1,0 +1,23 @@
+# Generados al correr el modo servidor local (python app.py)
+datos/
+*.db
+*.db-journal
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Privado / herramientas locales (no se publica)
+CLAUDE.md
+.claude/
+.env
+snowflake/
